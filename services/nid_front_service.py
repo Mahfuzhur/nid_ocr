@@ -1,0 +1,48 @@
+import os
+import shutil
+import tempfile
+
+from nid_ocr.components.preprocessing.image_preprocessor import ImagePreprocessor
+from nid_ocr.components.ocr.base import OCREngine
+from nid_ocr.components.detection.format_detector import NIDFormatDetector
+from nid_ocr.components.extraction.base import FieldExtractor
+from nid_ocr.domain.models import NIDFrontData
+from nid_ocr.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+class NIDFrontService:
+    def __init__(
+        self,
+        preprocessor: ImagePreprocessor,
+        ocr_engine: OCREngine,
+        detector: NIDFormatDetector,
+        extractor: FieldExtractor,
+    ):
+        self._preprocessor = preprocessor
+        self._ocr = ocr_engine
+        self._detector = detector
+        self._extractor = extractor
+
+    def process(self, image_path: str) -> NIDFrontData:
+        temp_dir = tempfile.mkdtemp()
+        try:
+            variants = self._preprocessor.preprocess(image_path, temp_dir)
+
+            all_segments: list[str] = []
+            seen: set[str] = set()
+            for path in variants.values():
+                for seg in self._ocr.extract(path):
+                    if seg not in seen:
+                        seen.add(seg)
+                        all_segments.append(seg)
+
+            logger.info(f"Front OCR: {len(all_segments)} segments collected")
+
+            fmt = self._detector.detect(all_segments)
+            fields = self._extractor.extract(all_segments, fmt)
+
+            return NIDFrontData(**fields)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
