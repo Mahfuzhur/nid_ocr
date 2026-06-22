@@ -87,8 +87,10 @@ COMMON_TERMS: dict[str, str] = {
 
     # Address structural terms
     "বাসা": "House",
+    "বাড়ি": "House",
     "হোল্ডিং": "Holding",
     "বাসা/হোল্ডিং": "House/Holding",
+    "বাড়ি/হোল্ডিং": "House/Holding",
     "ফ্ল্যাট": "Flat",
     "তলা": "Floor",
     "রোড": "Road",
@@ -103,10 +105,12 @@ COMMON_TERMS: dict[str, str] = {
     "ডাকঘর": "Post Office",
     "পোস্ট অফিস": "Post Office",
     "পার্ট": "Part",
+    "চর": "Char",
     "থানা": "Thana",
     "উপজেলা": "Upazila",
     "জেলা": "District",
     "পৌরসভা": "Municipality",
+    "পৌরোসভা": "Municipality",
     "ইউনিয়ন": "Union",
     "ওয়ার্ড": "Ward",
 
@@ -174,6 +178,9 @@ COMMON_TERMS: dict[str, str] = {
     "শরীয়তপুর": "Shariatpur",
     "রাজবাড়ী": "Rajbari",
     "মেহেন্দিগঞ্জ": "Mehendiganj",
+    "মেহেন্দগঞ্জ": "Mehendiganj",
+    "মেহেন্দীগঞ্জ": "Mehendiganj",
+    "চরহোগলা": "Charhogla",
     "পটুয়াখালী": "Patuakhali",
     "ভোলা": "Bhola",
     "পিরোজপুর": "Pirojpur",

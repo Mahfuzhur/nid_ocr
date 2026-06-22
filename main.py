@@ -7,6 +7,8 @@ from nid_ocr.components.preprocessing.image_preprocessor import ImagePreprocesso
 from nid_ocr.components.ocr.easyocr_engine import EasyOCREngine
 from nid_ocr.components.ocr.tesseract_engine import TesseractEngine
 from nid_ocr.components.ocr.composite_engine import CompositeOCREngine
+from nid_ocr.components.ocr.paddle_engine import PaddleOCREngine
+from nid_ocr.components.ocr.surya_engine import SuryaOCREngine
 from nid_ocr.components.detection.format_detector import NIDFormatDetector
 from nid_ocr.components.extraction.front_extractor import FrontFieldExtractor
 from nid_ocr.components.extraction.back_extractor import BackFieldExtractor
@@ -25,17 +27,29 @@ logger = get_logger(__name__)
 logger.info("Initializing components...")
 
 preprocessor    = ImagePreprocessor(settings)
-easy_engine     = EasyOCREngine(languages=settings.easyocr_languages, gpu=settings.easyocr_gpu)
+easy_engine     = EasyOCREngine(
+    languages=settings.easyocr_languages,
+    gpu=settings.easyocr_gpu,
+    min_confidence=settings.easyocr_min_confidence,
+)
 tess_engine     = TesseractEngine(lang=settings.tesseract_lang, config=settings.tesseract_config)
-ocr_engine      = CompositeOCREngine([easy_engine, tess_engine])
+paddle_engine   = PaddleOCREngine(lang=settings.paddle_lang)
+surya_engine    = SuryaOCREngine()
+engines = {
+    'auto':      CompositeOCREngine([easy_engine, tess_engine]),
+    'easyocr':   easy_engine,
+    'tesseract': tess_engine,
+    'paddle':    paddle_engine,
+    'surya':     surya_engine,
+}
 detector        = NIDFormatDetector()
 transliterator  = IndicNLPTransliterator(TermDictionary(COMMON_TERMS))
 
 front_extractor = FrontFieldExtractor(transliterator)
 back_extractor  = BackFieldExtractor(transliterator)
 
-front_service   = NIDFrontService(preprocessor, ocr_engine, detector, front_extractor)
-back_service    = NIDBackService(preprocessor, ocr_engine, detector, back_extractor)
+front_service   = NIDFrontService(preprocessor, engines, detector, front_extractor)
+back_service    = NIDBackService(preprocessor, engines, detector, back_extractor)
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 app = FastAPI(

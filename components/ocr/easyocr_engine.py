@@ -1,3 +1,4 @@
+import cv2
 import easyocr
 from .base import OCREngine
 from nid_ocr.core.logging import get_logger
@@ -6,14 +7,39 @@ logger = get_logger(__name__)
 
 
 class EasyOCREngine(OCREngine):
-    def __init__(self, languages: list[str], gpu: bool = False):
+    def __init__(self, languages: list[str], gpu: bool = False, min_confidence: float = 0.0):
         logger.info(f"Initializing EasyOCR with languages={languages}, gpu={gpu}")
         self._reader = easyocr.Reader(languages, gpu=gpu)
+        self._min_conf = min_confidence
 
     def extract(self, image_path: str) -> list[str]:
         try:
             results = self._reader.readtext(image_path)
-            return [text.strip() for (_, text, _) in results if text.strip()]
+
+            # Barcode filter: Smart NID back cards have a barcode in the top
+            # ~15% of the image (first-row mean < 170 when barcode is present).
+            # Filter out EasyOCR results whose bbox top falls in that zone so
+            # barcode noise doesn't reach the extractor.
+            barcode_zone = 0
+            try:
+                img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+                if img is not None and float(img[0, :].mean()) < 170:
+                    barcode_zone = img.shape[0] * 15 // 100
+                    logger.info(f"EasyOCR: barcode zone detected, filtering top {barcode_zone}px")
+            except Exception:
+                pass
+
+            out: list[str] = []
+            for (bbox, text, conf) in results:
+                text_s = text.strip()
+                if not text_s or conf < self._min_conf:
+                    continue
+                if barcode_zone:
+                    bbox_top = min(int(pt[1]) for pt in bbox)
+                    if bbox_top < barcode_zone:
+                        continue
+                out.append(text_s)
+            return out
         except Exception as e:
             logger.warning(f"EasyOCR failed on {image_path}: {e}")
             return []

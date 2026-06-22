@@ -8,6 +8,7 @@ from nid_ocr.core.logging import get_logger
 logger = get_logger(__name__)
 
 _LABEL_ADDRESS   = re.compile(r'ঠিকানা[:\s।]*')
+_HAS_BANGLA      = re.compile(r'[ঀ-৿]')
 # Blood group: allow digits (OCR confuses A→4, O→0)
 _LABEL_BLOOD_EN  = re.compile(r'Blood\s*Group[:\s]*([A-Z0-9]{1,2}[+\-])', re.IGNORECASE)
 _LABEL_BLOOD_ANY = re.compile(r'\b(AB|A|B|O|4|0)[+\-]')
@@ -23,6 +24,7 @@ _STOP_SEGMENTS   = re.compile(
     re.IGNORECASE,
 )
 _MRZ_LINE3       = re.compile(r'^[A-Z<]{20,}$')
+_SPACE_SLASH     = re.compile(r'\s*/\s*')
 
 # OCR substitutions common in blood group values
 _BG_FIXES = str.maketrans({'4': 'A', '0': 'O', '|': 'I'})
@@ -30,6 +32,14 @@ _BG_FIXES = str.maketrans({'4': 'A', '0': 'O', '|': 'I'})
 
 def _normalize_blood_group(raw: str) -> str:
     return raw.strip().upper().translate(_BG_FIXES)
+
+
+def _clean_address_text(raw: str) -> str:
+    raw = re.sub(r'\s+', ' ', raw)
+    raw = _SPACE_SLASH.sub('/', raw)        # "বাসা /হোল্ডিং" → "বাসা/হোল্ডিং"
+    raw = raw.replace(';', ',')             # OCR misreads ',' as ';'
+    raw = re.sub(r',\s*,', ',', raw)        # collapse consecutive commas
+    return raw.strip(', ')
 
 
 def _normalise_date(raw: str) -> str:
@@ -123,12 +133,32 @@ class BackFieldExtractor(FieldExtractor):
             if fmt == NIDFormat.SMART and not place_of_birth:
                 m = _LABEL_POB.search(seg_s)
                 if m:
-                    val = m.group(1).strip()
+                    raw_val = m.group(1).strip()
+                    # Capture only the uppercase place name; stop at first lowercase
+                    # word (garbled OCR noise from adjacent lines merged by OCR).
+                    uc_m = re.match(r'^([A-Z][A-Z\s\-]+?)(?:\s+[a-z]|$)', raw_val)
+                    val = uc_m.group(1).strip() if uc_m else raw_val.split()[0] if raw_val else ''
                     if val:
                         place_of_birth = val
 
+        # ── Positional address fallback ───────────────────────────────────
+        # When ঠিকানা: label was garbled by OCR, collect all Bengali-bearing
+        # segments that appear before the first stop trigger (Blood/Issue/Place).
+        if not address_parts:
+            stop_idx = len(segments)
+            for i, s in enumerate(segments):
+                if _STOP_SEGMENTS.search(s.strip()):
+                    stop_idx = i
+                    break
+            for s in segments[:stop_idx]:
+                s_s = s.strip()
+                if len(s_s) > 3 and _HAS_BANGLA.search(s_s):
+                    address_parts.append(s_s)
+            if address_parts:
+                logger.info(f"Address positional fallback: {len(address_parts)} segments before stop idx {stop_idx}")
+
         # ── Transliterate address ─────────────────────────────────────────
-        raw_address = ', '.join(address_parts) if address_parts else None
+        raw_address = _clean_address_text(', '.join(address_parts)) if address_parts else None
         address_en  = self._tr.transliterate(raw_address) if raw_address else None
 
         # ── MRZ name (Smart NID bonus) ────────────────────────────────────

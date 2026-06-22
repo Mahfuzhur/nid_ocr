@@ -1,0 +1,43 @@
+from PIL import Image
+
+from .base import OCREngine
+from nid_ocr.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+
+class SuryaOCREngine(OCREngine):
+    prefers_original_image: bool = True
+
+    def __init__(self):
+        self._det = None
+        self._rec = None
+
+    def _ensure_loaded(self):
+        if self._det is not None:
+            return
+        logger.info("Initializing Surya OCR on first use (takes 1-2 min to load models)...")
+        from surya.detection import DetectionPredictor
+        from surya.foundation import FoundationPredictor
+        from surya.recognition import RecognitionPredictor
+        from surya.settings import settings as surya_settings
+        self._det = DetectionPredictor()
+        foundation = FoundationPredictor(checkpoint=surya_settings.RECOGNITION_MODEL_CHECKPOINT)
+        self._rec = RecognitionPredictor(foundation)
+        logger.info("Surya OCR models loaded.")
+
+    def extract(self, image_path: str) -> list[str]:
+        try:
+            self._ensure_loaded()
+            image = Image.open(image_path).convert('RGB')
+            results = self._rec([image], det_predictor=self._det)
+            segments: list[str] = []
+            for page in results:
+                for line in page.text_lines:
+                    t = (line.text or '').replace('<br>', ' ').strip()
+                    if t:
+                        segments.append(t)
+            return segments
+        except Exception as e:
+            logger.warning(f"Surya OCR failed on {image_path}: {e}")
+            return []

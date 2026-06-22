@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from nid_ocr.api.schemas.response import NIDBackResponse
 from nid_ocr.services.nid_back_service import NIDBackService
 from nid_ocr.core.config import settings
@@ -24,7 +24,15 @@ class NIDBackRouter:
             summary="Extract fields from NID back image",
         )
 
-    async def _handle(self, file: UploadFile = File(...)) -> NIDBackResponse:
+    async def _handle(
+        self,
+        file: UploadFile = File(...),
+        ocr: str = Query(
+            default='auto',
+            pattern='^(auto|easyocr|tesseract|paddle|surya)$',
+            description="OCR engine: auto, easyocr, tesseract, paddle, or surya",
+        ),
+    ) -> NIDBackResponse:
         self._validate_extension(file.filename)
 
         tmp_dir = tempfile.mkdtemp()
@@ -33,8 +41,8 @@ class NIDBackRouter:
             with open(tmp_path, "wb") as f:
                 shutil.copyfileobj(file.file, f)
 
-            logger.info(f"Processing back NID: {file.filename}")
-            result = self._service.process(tmp_path)
+            logger.info(f"Processing back NID: {file.filename} (ocr={ocr})")
+            result = self._service.process(tmp_path, ocr=ocr)
             return NIDBackResponse(
                 address=result.address,
                 blood_group=result.blood_group,
