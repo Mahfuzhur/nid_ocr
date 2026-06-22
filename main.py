@@ -1,3 +1,7 @@
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")  # nid_ocr/.env
+
 from fastapi import FastAPI
 
 from nid_ocr.core.config import settings

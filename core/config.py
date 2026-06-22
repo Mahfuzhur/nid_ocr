@@ -16,7 +16,8 @@ class Settings:
     # Prevents EasyOCR from running on 100MP+ images when input is already high-res.
     max_long_side: int = 2000
 
-    # OCR
+    # OCR — engine used for all requests; override via DEFAULT_OCR_ENGINE env var.
+    default_ocr_engine: str = field(default_factory=lambda: os.environ.get('DEFAULT_OCR_ENGINE', 'surya'))
     easyocr_languages: list = field(default_factory=lambda: ['bn', 'en'])
     easyocr_gpu: bool = False
     easyocr_min_confidence: float = 0.0

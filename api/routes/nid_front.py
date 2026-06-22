@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from nid_ocr.api.schemas.response import NIDFrontResponse
 from nid_ocr.services.nid_front_service import NIDFrontService
 from nid_ocr.core.config import settings
@@ -27,11 +27,6 @@ class NIDFrontRouter:
     async def _handle(
         self,
         file: UploadFile = File(...),
-        ocr: str = Query(
-            default='auto',
-            pattern='^(auto|easyocr|tesseract|paddle|surya)$',
-            description="OCR engine: auto, easyocr, tesseract, paddle, or surya",
-        ),
     ) -> NIDFrontResponse:
         self._validate_extension(file.filename)
 
@@ -41,6 +36,7 @@ class NIDFrontRouter:
             with open(tmp_path, "wb") as f:
                 shutil.copyfileobj(file.file, f)
 
+            ocr = settings.default_ocr_engine
             logger.info(f"Processing front NID: {file.filename} (ocr={ocr})")
             result = self._service.process(tmp_path, ocr=ocr)
             return NIDFrontResponse(
