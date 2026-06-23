@@ -18,6 +18,10 @@ class Settings:
 
     # OCR — engine used for all requests; override via DEFAULT_OCR_ENGINE env var.
     default_ocr_engine: str = field(default_factory=lambda: os.environ.get('DEFAULT_OCR_ENGINE', 'surya'))
+    # Surya dtype: 'float32' (full precision) or 'float16' (Surya GPU default).
+    # float32 → ~2x GPU memory, ~30% slower, better accuracy.
+    # CPU deployments run float32 regardless of this value.
+    surya_dtype: str = field(default_factory=lambda: os.environ.get('SURYA_DTYPE', 'float32'))
     easyocr_languages: list = field(default_factory=lambda: ['bn', 'en'])
     easyocr_gpu: bool = False
     easyocr_min_confidence: float = 0.0

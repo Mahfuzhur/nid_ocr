@@ -23,13 +23,17 @@ class SuryaOCREngine(OCREngine):
     def _ensure_loaded(self):
         if self._det is not None:
             return
-        logger.info("Initializing Surya OCR on first use (takes 1-2 min to load models)...")
+        import torch
+        from nid_ocr.core.config import settings
         from surya.detection import DetectionPredictor
         from surya.foundation import FoundationPredictor
         from surya.recognition import RecognitionPredictor
         from surya.settings import settings as surya_settings
+
+        dtype = torch.float32 if settings.surya_dtype == 'float32' else torch.float16
+        logger.info(f"Initializing Surya OCR (dtype={settings.surya_dtype}, takes 1-2 min)...")
         self._det = DetectionPredictor()
-        foundation = FoundationPredictor(checkpoint=surya_settings.RECOGNITION_MODEL_CHECKPOINT)
+        foundation = FoundationPredictor(checkpoint=surya_settings.RECOGNITION_MODEL_CHECKPOINT, dtype=dtype)
         self._rec = RecognitionPredictor(foundation)
         logger.info("Surya OCR models loaded.")
 
