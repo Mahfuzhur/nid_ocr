@@ -1,7 +1,14 @@
+import re
 from PIL import Image
 
 from .base import OCREngine
 from nid_ocr.core.logging import get_logger
+
+# Bengali dependent vowel markers (U+09BE – U+09CC) and virama (U+09CD).
+# When <br> is immediately followed by one of these, the line broke mid-word
+# inside a Bengali syllable — join without a space so the vowel stays attached
+# to its consonant rather than becoming an orphaned fragment.
+_BR_BEFORE_VOWEL = re.compile(r'<br>(?=[া-ৌ্])')
 
 logger = get_logger(__name__)
 
@@ -34,7 +41,9 @@ class SuryaOCREngine(OCREngine):
             segments: list[str] = []
             for page in results:
                 for line in page.text_lines:
-                    t = (line.text or '').replace('<br>', ' ').strip()
+                    t = line.text or ''
+                    t = _BR_BEFORE_VOWEL.sub('', t)   # join mid-word breaks
+                    t = t.replace('<br>', ' ').strip()
                     if t:
                         segments.append(t)
             return segments

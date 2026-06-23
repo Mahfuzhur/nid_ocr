@@ -89,8 +89,11 @@ COMMON_TERMS: dict[str, str] = {
     "বাসা": "House",
     "বাড়ি": "House",
     "হোল্ডিং": "Holding",
+    "হোভিং": "Holding",          # OCR: ল্ড→ভ
     "বাসা/হোল্ডিং": "House/Holding",
     "বাড়ি/হোল্ডিং": "House/Holding",
+    "বাসা/হোভিং": "House/Holding",   # OCR variant
+    "বাড়ি/হোভিং": "House/Holding",  # OCR variant
     "ফ্ল্যাট": "Flat",
     "তলা": "Floor",
     "রোড": "Road",
@@ -99,10 +102,15 @@ COMMON_TERMS: dict[str, str] = {
     "গ্রাম": "Village",
     "গ্রাম/রাস্তা": "Village/Road",
     "মহল্লা": "Mohalla",
+    "পাড়া ডগ": "Para Dagair",   # Surya truncates ডাগাইর → ডগ
+    "পাড়া ডাগাইর": "Para Dagair",
+    "পল্লবী": "Pallabi",
+    "পল্পবী": "Pallabi",      # OCR: ল্ল→ল্প
     "পাড়া": "Para",
     "ব্লক": "Block",
     "সেক্টর": "Sector",
     "ডাকঘর": "Post Office",
+    "ডেমরা": "Demra",
     "পোস্ট অফিস": "Post Office",
     "পার্ট": "Part",
     "চর": "Char",
@@ -116,9 +124,23 @@ COMMON_TERMS: dict[str, str] = {
 
     # Dhaka & areas
     "ঢাকা": "Dhaka",
+    # City Corporation — multiple variants because Surya:
+    #   (a) splits সিটি / কর্পোরেশন across segments → comma in joined text
+    #   (b) reads কর্পোরেশন as কপোৱেশন (র্পো→পো, র→ৱ)
+    "ঢাকা উত্তর সিটি, কপোৱেশন": "Dhaka North City Corporation",
+    "ঢাকা দক্ষিণ সিটি, কপোৱেশন": "Dhaka South City Corporation",
     "ঢাকা সিটি কর্পোরেশন": "Dhaka City Corporation",
     "উত্তর সিটি কর্পোরেশন": "North City Corporation",
     "দক্ষিণ সিটি কর্পোরেশন": "South City Corporation",
+    "উত্তর সিটি, কপোৱেশন": "North City Corporation",
+    "দক্ষিণ সিটি, কপোৱেশন": "South City Corporation",
+    "সিটি, কপোৱেশন": "City Corporation",
+    "সিটি কপোৱেশন": "City Corporation",
+    "সিটি কর্পোরেশন": "City Corporation",
+    "কপোৱেশন": "Corporation",   # OCR misread of কর্পোরেশন
+    "কর্পোরেশন": "Corporation",
+    "করপোরেশন": "Corporation",
+    "সিটি": "City",
     "মোহাম্মদপুর": "Mohammadpur",
     "মিরপুর": "Mirpur",
     "উত্তরা": "Uttara",
@@ -200,6 +222,7 @@ COMMON_TERMS: dict[str, str] = {
     "মেহেরপুর": "Meherpur",
     "চুয়াডাঙ্গা": "Chuadanga",
     "ঝিনাইদহ": "Jhenaidah",
+    "বিনাইদহ": "Jhenaidah",   # OCR misreads ঝ as ব
     "নড়াইল": "Narail",
     "মাগুরা": "Magura",
     "সাতক্ষীরা": "Satkhira",

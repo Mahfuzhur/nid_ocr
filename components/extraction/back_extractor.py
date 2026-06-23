@@ -35,11 +35,17 @@ def _normalize_blood_group(raw: str) -> str:
 
 
 def _clean_address_text(raw: str) -> str:
+    # Strip Devanagari block (U+0900–U+097F): Surya occasionally mistakes
+    # Bengali script for Hindi, producing Devanagari garbage characters.
+    raw = re.sub(r'[ऀ-ॿ]+', '', raw)
     raw = re.sub(r'\s+', ' ', raw)
     raw = _SPACE_SLASH.sub('/', raw)        # "বাসা /হোল্ডিং" → "বাসা/হোল্ডিং"
     raw = raw.replace(';', ',')             # OCR misreads ',' as ';'
     raw = re.sub(r',\s*,', ',', raw)        # collapse consecutive commas
-    return raw.strip(', ')
+    # Segment joins add a comma before "- <pincode>" but it should be a space-dash.
+    # e.g. "Para Dagair, - 1216" → "Para Dagair - 1216"
+    raw = re.sub(r',\s+(-\s*\d)', r' \1', raw)
+    return raw.strip(', -')
 
 
 def _normalise_date(raw: str) -> str:
