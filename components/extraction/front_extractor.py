@@ -68,8 +68,9 @@ def _is_clean_english_name(text: str) -> bool:
     text = text.strip()
     if _NAME_JUNK.search(text):
         return False
-    # Long strings without spaces are garbled (e.g. 'HDLIFTEKAARALAMUTSA')
-    if len(text) > 15 and ' ' not in text:
+    # Long strings with no word separators at all are garbled (e.g. 'HDLIFTEKAARALAMUTSA').
+    # Hyphens are valid in names like 'ABDULLAH-HEL-AZMAIN', so allow them as separators.
+    if len(text) > 15 and not re.search(r'[\s\-]', text):
         return False
     return bool(re.match(r"^[A-Za-z][A-Za-z\s\.\-']{1,}$", text))
 
