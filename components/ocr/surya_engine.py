@@ -46,8 +46,10 @@ class SuryaOCREngine(OCREngine):
             for page in results:
                 for line in page.text_lines:
                     t = line.text or ''
-                    t = _BR_BEFORE_VOWEL.sub('', t)   # join mid-word breaks
-                    t = t.replace('<br>', ' ').strip()
+                    t = _BR_BEFORE_VOWEL.sub('', t)      # join mid-word line breaks
+                    t = t.replace('<br>', ' ')
+                    t = re.sub(r'<[^>]+>', '', t)        # strip <mark>, <b>, etc.
+                    t = t.strip()
                     if t:
                         segments.append(t)
             return segments
