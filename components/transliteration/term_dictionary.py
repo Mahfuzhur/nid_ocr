@@ -110,6 +110,7 @@ COMMON_TERMS: dict[str, str] = {
     "ব্লক": "Block",
     "সেক্টর": "Sector",
     "ডাকঘর": "Post Office",
+    "ভাকঘর": "Post Office",      # OCR misreads ড (Da) as ভ (Bh)
     "ডেমরা": "Demra",
     "পোস্ট অফিস": "Post Office",
     "পার্ট": "Part",
@@ -141,6 +142,12 @@ COMMON_TERMS: dict[str, str] = {
     "কর্পোরেশন": "Corporation",
     "করপোরেশন": "Corporation",
     "সিটি": "City",
+    # Place names ending in -তলা must come before "তলা"→"Floor" to avoid suffix substitution
+    "জিগাতলা": "Jigatola",
+    "তালতলা": "Taltola",
+    "নয়াতলা": "Nayatola",
+    "শ্যামলী": "Shyamoli",
+
     "মোহাম্মদপুর": "Mohammadpur",
     "মিরপুর": "Mirpur",
     "উত্তরা": "Uttara",
