@@ -12,17 +12,21 @@ _BN = re.compile(r'[ঀ-৿]')
 # Covers OCR variants: "Name", "Name:", "Narne" (stamp garble m→rn), "Nane"
 _LABEL_NAME_EN = re.compile(r'^(?:Name?|Narne|Nane?)\s*[:\.]?\s*(.*)$', re.IGNORECASE)
 _LABEL_NAME_BN = re.compile(r'^নাম[:\s।]*(.*)$')
-_LABEL_FATHER  = re.compile(r'^(?:পিতা|পিতাঃ|পিতা:)[:\s।]*(.*)$')
-_LABEL_MOTHER  = re.compile(r'^(?:মাতা|মাতাঃ|মাতা:)[:\s।]*(.*)$')
-_LABEL_SPOUSE  = re.compile(r'^(?:স্বামী|পত্নী|স্বামী:|পত্নী:)[:\s।]*(.*)$')
+# স্বামী (husband) fills the guardian slot on female NIDs — maps to father_name
+# পিতা/স্বামী is the combined label on older cards; Surya sometimes reads only স্বামী
+_LABEL_FATHER  = re.compile(r'^(?:পিতা|পিতাঃ|পিতা:|পিতা/স্বামী|স্বামী|স্বামী:)[:\s।]*(.*)$')
+# যাতা is Surya's common misread of মাতা (ম→য)
+_LABEL_MOTHER  = re.compile(r'^(?:মাতা|মাতাঃ|মাতা:|যাতা|যাতা:)[:\s।]*(.*)$')
+# পত্নী (wife) only — স্বামী now handled by father label above
+_LABEL_SPOUSE  = re.compile(r'^(?:পত্নী|পত্নী:)[:\s।]*(.*)$')
 _LABEL_DOB     = re.compile(r'Date\s+of\s+Birth[:\s]*(.+)', re.IGNORECASE)
 _LABEL_NID_OLD = re.compile(r'ID\s*NO[:\s]*(.+)', re.IGNORECASE)
 _LABEL_NID_NEW = re.compile(r'NID\s*No[\.;]?[:\s]*(.+)', re.IGNORECASE)
 
 # Fuzzy label matchers — handle stamp/noise garbling (prefix match + short segment)
-_FATHER_FUZZY = re.compile(r'পিত')
-_MOTHER_FUZZY = re.compile(r'মাত')
-_SPOUSE_FUZZY = re.compile(r'স্বামী|পত্নী')
+_FATHER_FUZZY = re.compile(r'পিত|স্বামী')
+_MOTHER_FUZZY = re.compile(r'মাত|যাতা')
+_SPOUSE_FUZZY = re.compile(r'পত্নী')
 
 _DOB_PATTERN = re.compile(r'\d{1,2}\s+[A-Za-z]{3}\s+\d{4}')
 _DIGIT_ONLY  = re.compile(r'\d{8,17}')
