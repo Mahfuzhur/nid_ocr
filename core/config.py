@@ -32,6 +32,10 @@ class Settings:
     # Image upload
     allowed_extensions: tuple = ('.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.webp')
 
+    # Permanent storage — every uploaded image is copied here (organized by date),
+    # in addition to the temp copy used for processing. Override via UPLOAD_STORAGE_DIR.
+    upload_storage_dir: str = field(default_factory=lambda: os.environ.get('UPLOAD_STORAGE_DIR', 'storage/uploads'))
+
     # IndicNLP
     indic_resources_path: str = os.environ.get('INDIC_RESOURCES_PATH', '')
 

@@ -1,0 +1,58 @@
+BANGLADESH NID OCR SERVICE - USER MANUAL
+==========================================
+
+WHAT THIS DOES
+--------------
+This tool reads a photo of a Bangladesh National ID (NID) card and automatically
+pulls out the printed information (name, NID number, date of birth, address, etc.)
+so you don't have to type it in by hand.
+
+You give it a picture, it gives you back the text.
+
+It works completely offline - no internet connection is needed once it is running,
+and no data is sent outside the computer/server it runs on.
+
+
+STEP 1: UPLOAD THE FRONT OF THE NID CARD
+-----------------------------------------
+1. On the /docs page, find and click "POST /nid/front".
+2. Click the "Try it out" button (top right of that section).
+3. Click "Choose File" and select the photo of the front of the NID card.
+   - Accepted file types: .png, .jpg, .jpeg, .bmp, .tiff, .webp
+4. Click the blue "Execute" button.
+5. Scroll down to "Response body". You'll see the extracted information, for example:
+
+   {
+     "name": "MD SAKIB HASAN",
+     "father_name": "MD ABDUL KARIM",
+     "mother_name": "MST RAHIMA BEGUM",
+     "spouse_name": null,
+     "date_of_birth": "01 Jan 1995",
+     "nid_number": "1234567890123"
+   }
+
+   If a field wasn't found on the card (e.g. no spouse listed), it will show as
+   null (empty).
+
+
+STEP 2: UPLOAD THE BACK OF THE NID CARD (OPTIONAL, SEPARATE STEP)
+-------------------------------------------------------------------
+1. Find and click "POST /nid/back".
+2. Click "Try it out", choose the back-side photo, then click "Execute".
+3. The response will show:
+
+   {
+     "address": "Village: ..., District: ...",
+     "blood_group": "B+",
+     "issue_date": "01 Jan 2020",
+     "place_of_birth": "Dhaka"
+   }
+
+
+TIPS FOR GOOD RESULTS
+----------------------
+- Use a well-lit, in-focus photo - avoid glare, shadows, or blur.
+- Make sure the whole card is visible in the frame (not cropped).
+- Hold the camera directly above the card, not at an angle.
+- Higher resolution photos generally give more accurate results.
+- Front and back are uploaded separately - one photo per request.

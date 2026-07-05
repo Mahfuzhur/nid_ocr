@@ -8,6 +8,7 @@ from nid_ocr.services.nid_front_service import NIDFrontService
 from nid_ocr.core.config import settings
 from nid_ocr.core.exceptions import NIDOCRError
 from nid_ocr.core.logging import get_logger
+from nid_ocr.core.storage import save_upload
 
 logger = get_logger(__name__)
 
@@ -35,6 +36,8 @@ class NIDFrontRouter:
         try:
             with open(tmp_path, "wb") as f:
                 shutil.copyfileobj(file.file, f)
+
+            save_upload(tmp_path, "front", file.filename)
 
             ocr = settings.default_ocr_engine
             logger.info(f"Processing front NID: {file.filename} (ocr={ocr})")
