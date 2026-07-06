@@ -14,7 +14,7 @@ class Settings:
 
     # If source image * upscale_factor exceeds this long-side pixel count, cap it.
     # Prevents EasyOCR from running on 100MP+ images when input is already high-res.
-    max_long_side: int = 2000
+    max_long_side: int = 3500
 
     # OCR — engine used for all requests; override via DEFAULT_OCR_ENGINE env var.
     default_ocr_engine: str = field(default_factory=lambda: os.environ.get('DEFAULT_OCR_ENGINE', 'surya'))
