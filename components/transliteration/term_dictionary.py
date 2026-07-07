@@ -94,6 +94,7 @@ COMMON_TERMS: dict[str, str] = {
     "বাড়ি/হোল্ডিং": "House/Holding",
     "বাসা/হোভিং": "House/Holding",   # OCR variant
     "বাড়ি/হোভিং": "House/Holding",  # OCR variant
+    "বালা/হেচ্ছিত্র": "House/Holding:",  # OCR variant — heavy garbling; also loses its own colon
     "ফ্ল্যাট": "Flat",
     "তলা": "Floor",
     "রোড": "Road",
@@ -103,6 +104,7 @@ COMMON_TERMS: dict[str, str] = {
     "গ্রাম": "Village",
     "গ্রাম/রাস্তা": "Village/Road",
     "গ্রাম/রন্তা": "Village/Road",  # OCR variant
+    "গ্রাম/রাজ্ঞা": "Village/Road",  # OCR variant
     "মহল্লা": "Mohalla",
     "পাড়া ডগ": "Para Dagair",   # Surya truncates ডাগাইর → ডগ
     "পাড়া ডাগাইর": "Para Dagair",
@@ -113,6 +115,7 @@ COMMON_TERMS: dict[str, str] = {
     "সেক্টর": "Sector",
     "ডাকঘর": "Post Office",
     "ভাকঘর": "Post Office",      # OCR misreads ড (Da) as ভ (Bh)
+    "ভাকখন": "Post Office",      # OCR variant
     "ডেমরা": "Demra",
     "পোস্ট অফিস": "Post Office",
     "পার্ট": "Part",

@@ -8,6 +8,15 @@ from nid_ocr.core.logging import get_logger
 logger = get_logger(__name__)
 
 _LABEL_ADDRESS   = re.compile(r'ঠিকানা[:\s।]*')
+# House/Holding: far more OCR-reliable than ঠিকানা itself — ঠিকানা often
+# loses its leading characters, but this label (present in Bangla + English
+# on every NID back) tends to survive. Used as the true start-of-address
+# anchor so any boilerplate ("this card is government property...") that OCR
+# merges in ahead of it is dropped rather than swept into the address.
+_LABEL_HOUSE     = re.compile(
+    r'(?:বাসা|বাড়ি)\s*/?\s*(?:হোল্ডিং|হোভিং)|House\s*/\s*Holding',
+    re.IGNORECASE,
+)
 _HAS_BANGLA      = re.compile(r'[ঀ-৿]')
 # Blood group: allow digits (OCR confuses A→4, O→0)
 _LABEL_BLOOD_EN  = re.compile(r'Blood\s*Group[:\s]*([A-Z0-9]{1,2}[+\-])', re.IGNORECASE)
@@ -15,7 +24,9 @@ _LABEL_BLOOD_ANY = re.compile(r'\b(AB|A|B|O|4|0)[+\-]')
 # Place of birth: allow "or" as OCR misread of "of"
 _LABEL_POB       = re.compile(r'Place\s+o[fr]\s*Birth[:\s]*(.+)', re.IGNORECASE)
 _LABEL_ISSUE_OLD = re.compile(r'প্রদানের\s*তারিখ[:\s।]*(.+)')
-_LABEL_ISSUE_NEW = re.compile(r'Issue\s*Date[:\s]*(.*)', re.IGNORECASE)
+# "Issue" is frequently dropped/garbled by OCR (e.g. "e-Date:"), so only
+# require "Date" — on the back of a SMART NID this label is unambiguous.
+_LABEL_ISSUE_NEW = re.compile(r'(?:Issue\s*)?Date[:\s]*(.*)', re.IGNORECASE)
 _DATE_PATTERN    = re.compile(
     r'\d{1,2}[\/\-.\s]\d{1,2}[\/\-.\s]\d{4}|\d{1,2}\s+[A-Za-z]{3}\s+\d{4}'
 )
@@ -24,6 +35,9 @@ _STOP_SEGMENTS   = re.compile(
     re.IGNORECASE,
 )
 _MRZ_LINE3       = re.compile(r'^[A-Z<]{20,}$')
+# Generic MRZ line (all 3 lines: letters/digits/'<' only) — used to end the
+# address block even when a line doesn't match the stricter _MRZ_LINE3 shape.
+_MRZ_ANY         = re.compile(r'^[A-Z0-9<]{15,}$')
 _SPACE_SLASH     = re.compile(r'\s*/\s*')
 
 # OCR substitutions common in blood group values
@@ -32,6 +46,19 @@ _BG_FIXES = str.maketrans({'4': 'A', '0': 'O', '|': 'I'})
 
 def _normalize_blood_group(raw: str) -> str:
     return raw.strip().upper().translate(_BG_FIXES)
+
+
+def _is_address_stop(seg_s: str) -> bool:
+    # Beyond the literal Blood/Issue/etc. keywords (which OCR often mangles —
+    # "Blood Group" -> "Clinor Group", "Issue Date" -> "e-Date"), also stop on
+    # the *shape* of a blood-group value, a full date, or an MRZ line, since
+    # none of those ever legitimately appear inside an address.
+    return bool(
+        _STOP_SEGMENTS.search(seg_s)
+        or _LABEL_BLOOD_ANY.search(seg_s)
+        or _DATE_PATTERN.search(seg_s)
+        or _MRZ_ANY.match(seg_s.replace(' ', ''))
+    )
 
 
 def _clean_address_text(raw: str) -> str:
@@ -83,22 +110,26 @@ class BackFieldExtractor(FieldExtractor):
 
             # ── Address block ─────────────────────────────────────────────
             addr_m = _LABEL_ADDRESS.search(seg_s)
-            if addr_m:
-                # Reset on each new ঠিকানা: label so a cleaner second OCR
-                # pass overwrites garbled content from the first pass.
-                # Slice from the match's end (not .sub()) so any boilerplate
-                # text OCR merged onto the same line *before* the label —
-                # e.g. the "card is government property" notice — is dropped
-                # along with it, rather than kept as an address prefix.
+            house_m = _LABEL_HOUSE.search(seg_s)
+            if addr_m or house_m:
+                # Reset on each new label so a cleaner second OCR pass
+                # overwrites garbled content from the first pass.
+                # Slice from the match's start/end (not .sub()) so any
+                # boilerplate text OCR merged onto the same line *before* the
+                # label — e.g. the "card is government property" notice — is
+                # dropped along with it, rather than kept as an address prefix.
+                # House/Holding wins when both are found: it survives OCR far
+                # more reliably than ঠিকানা, so it's the truer anchor.
                 in_address = True
                 address_parts = []
-                inline = seg_s[addr_m.end():].strip()
+                start = house_m.start() if house_m else addr_m.end()
+                inline = seg_s[start:].strip()
                 if inline:
                     address_parts.append(inline)
                 continue
 
             if in_address:
-                if _STOP_SEGMENTS.search(seg_s):
+                if _is_address_stop(seg_s):
                     in_address = False
                 elif len(seg_s) > 2:
                     address_parts.append(seg_s)
@@ -158,19 +189,33 @@ class BackFieldExtractor(FieldExtractor):
         if not address_parts:
             stop_idx = len(segments)
             for i, s in enumerate(segments):
-                if _STOP_SEGMENTS.search(s.strip()):
+                if _is_address_stop(s.strip()):
                     stop_idx = i
                     break
             candidates = segments[:stop_idx]
+            # Prefer restarting from the House/Holding anchor: it survives OCR
+            # far more reliably than ঠিকানা, so it catches cases (e.g. the
+            # notice text sitting on its own lines before the address) where
+            # ঠিকানা was garbled beyond recognition and would otherwise let the
+            # boilerplate get swept in as address content.
+            restarted = False
+            for i, s in enumerate(candidates):
+                house_m = _LABEL_HOUSE.search(s.strip())
+                if house_m:
+                    first = s.strip()[house_m.start():].strip()
+                    candidates = ([first] if first else []) + list(candidates[i + 1:])
+                    restarted = True
+                    break
             # If the ঠিকানা: label survived somewhere in this range but the
             # main loop above missed it, start from there so the "card is
             # government property" notice text isn't swept in as address.
-            for i, s in enumerate(candidates):
-                label_m = _LABEL_ADDRESS.search(s.strip())
-                if label_m:
-                    first = s.strip()[label_m.end():].strip()
-                    candidates = ([first] if first else []) + list(candidates[i + 1:])
-                    break
+            if not restarted:
+                for i, s in enumerate(candidates):
+                    label_m = _LABEL_ADDRESS.search(s.strip())
+                    if label_m:
+                        first = s.strip()[label_m.end():].strip()
+                        candidates = ([first] if first else []) + list(candidates[i + 1:])
+                        break
             for s in candidates:
                 s_s = s.strip()
                 if len(s_s) > 3 and _HAS_BANGLA.search(s_s):
