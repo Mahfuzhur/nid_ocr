@@ -101,13 +101,15 @@ class UploadsRouter:
   .fields div {{ margin-bottom: 0.15rem; }}
   .pagination {{ margin-top: 1rem; display: flex; gap: 1rem; align-items: center; font-size: 0.85rem; }}
   .pagination a {{ color: #2563eb; text-decoration: none; }}
-  .thumb-wrap {{ position: relative; display: inline-block; vertical-align: middle; }}
+  .thumb-wrap {{ position: relative; display: inline-block; vertical-align: middle; cursor: zoom-in; }}
+  .thumb-toggle {{ display: none; }}
   .thumb {{ width: 44px; height: 44px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;
-            cursor: zoom-in; transition: all 0.15s ease; }}
-  .thumb-wrap:hover .thumb {{
+            transition: all 0.15s ease; }}
+  .thumb-toggle:checked ~ .thumb {{
     width: 340px; height: 340px; object-fit: contain; background: #fff;
     position: absolute; top: 50%; left: 0; transform: translateY(-50%);
     z-index: 20; border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    cursor: zoom-out;
   }}
 </style>
 </head>
@@ -174,8 +176,9 @@ class UploadsRouter:
             details = escape(row["error_message"] or "Unknown error")
 
         image_link = (
-            f'<a class="thumb-wrap" href="/uploads/{row["id"]}/image" target="_blank">'
-            f'<img class="thumb" src="/uploads/{row["id"]}/image" alt="preview" loading="lazy"></a>'
+            f'<label class="thumb-wrap">'
+            f'<input type="checkbox" class="thumb-toggle">'
+            f'<img class="thumb" src="/uploads/{row["id"]}/image" alt="preview" loading="lazy"></label>'
             if row["stored_path"] else "—"
         )
 
