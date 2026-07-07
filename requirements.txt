@@ -6,3 +6,4 @@ pytesseract>=0.3.10
 opencv-python>=4.8.0
 numpy>=1.24.0
 indic-nlp-library>=0.92
+PyMySQL>=1.1.0

@@ -36,6 +36,14 @@ class Settings:
     # in addition to the temp copy used for processing. Override via UPLOAD_STORAGE_DIR.
     upload_storage_dir: str = field(default_factory=lambda: os.environ.get('UPLOAD_STORAGE_DIR', 'storage/uploads'))
 
+    # MySQL — stores one row per upload (front or back) with the extracted fields,
+    # so the /uploads page can list and filter past results.
+    db_host: str = field(default_factory=lambda: os.environ.get('DB_HOST', 'localhost'))
+    db_port: int = field(default_factory=lambda: int(os.environ.get('DB_PORT', '3306')))
+    db_user: str = field(default_factory=lambda: os.environ.get('DB_USER', 'root'))
+    db_password: str = field(default_factory=lambda: os.environ.get('DB_PASSWORD', ''))
+    db_name: str = field(default_factory=lambda: os.environ.get('DB_NAME', 'nid_ocr'))
+
     # IndicNLP
     indic_resources_path: str = os.environ.get('INDIC_RESOURCES_PATH', '')
 

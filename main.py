@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from nid_ocr.core.config import settings
 from nid_ocr.core.logging import get_logger
+from nid_ocr.core.db import init_db
 
 from nid_ocr.components.preprocessing.image_preprocessor import ImagePreprocessor
 from nid_ocr.components.ocr.easyocr_engine import EasyOCREngine
@@ -24,6 +25,7 @@ from nid_ocr.services.nid_back_service import NIDBackService
 
 from nid_ocr.api.routes.nid_front import NIDFrontRouter
 from nid_ocr.api.routes.nid_back import NIDBackRouter
+from nid_ocr.api.routes.uploads import UploadsRouter
 
 logger = get_logger(__name__)
 
@@ -64,6 +66,9 @@ app = FastAPI(
 
 app.include_router(NIDFrontRouter(front_service).router, tags=["NID"])
 app.include_router(NIDBackRouter(back_service).router,   tags=["NID"])
+app.include_router(UploadsRouter().router,               tags=["Uploads"])
+
+init_db()
 
 logger.info("NID OCR Service ready.")
 

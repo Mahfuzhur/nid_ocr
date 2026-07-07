@@ -99,8 +99,10 @@ COMMON_TERMS: dict[str, str] = {
     "রোড": "Road",
     "সড়ক": "Road",
     "রাস্তা": "Road",
+    "রন্তা": "Road",              # OCR: রাস্ misread as রন্
     "গ্রাম": "Village",
     "গ্রাম/রাস্তা": "Village/Road",
+    "গ্রাম/রন্তা": "Village/Road",  # OCR variant
     "মহল্লা": "Mohalla",
     "পাড়া ডগ": "Para Dagair",   # Surya truncates ডাগাইর → ডগ
     "পাড়া ডাগাইর": "Para Dagair",

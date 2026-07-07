@@ -82,12 +82,17 @@ class BackFieldExtractor(FieldExtractor):
             seg_s = seg.strip()
 
             # ── Address block ─────────────────────────────────────────────
-            if _LABEL_ADDRESS.search(seg_s):
+            addr_m = _LABEL_ADDRESS.search(seg_s)
+            if addr_m:
                 # Reset on each new ঠিকানা: label so a cleaner second OCR
                 # pass overwrites garbled content from the first pass.
+                # Slice from the match's end (not .sub()) so any boilerplate
+                # text OCR merged onto the same line *before* the label —
+                # e.g. the "card is government property" notice — is dropped
+                # along with it, rather than kept as an address prefix.
                 in_address = True
                 address_parts = []
-                inline = _LABEL_ADDRESS.sub('', seg_s).strip()
+                inline = seg_s[addr_m.end():].strip()
                 if inline:
                     address_parts.append(inline)
                 continue
@@ -156,7 +161,17 @@ class BackFieldExtractor(FieldExtractor):
                 if _STOP_SEGMENTS.search(s.strip()):
                     stop_idx = i
                     break
-            for s in segments[:stop_idx]:
+            candidates = segments[:stop_idx]
+            # If the ঠিকানা: label survived somewhere in this range but the
+            # main loop above missed it, start from there so the "card is
+            # government property" notice text isn't swept in as address.
+            for i, s in enumerate(candidates):
+                label_m = _LABEL_ADDRESS.search(s.strip())
+                if label_m:
+                    first = s.strip()[label_m.end():].strip()
+                    candidates = ([first] if first else []) + list(candidates[i + 1:])
+                    break
+            for s in candidates:
                 s_s = s.strip()
                 if len(s_s) > 3 and _HAS_BANGLA.search(s_s):
                     address_parts.append(s_s)
