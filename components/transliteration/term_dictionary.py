@@ -90,6 +90,7 @@ COMMON_TERMS: dict[str, str] = {
     "বাড়ি": "House",
     "হোল্ডিং": "Holding",
     "হোভিং": "Holding",          # OCR: ল্ড→ভ
+    "হোতিং": "Holding",          # OCR: ল্ড→ত
     "বাসা/হোল্ডিং": "House/Holding",
     "বাড়ি/হোল্ডিং": "House/Holding",
     "বাসা/হোভিং": "House/Holding",   # OCR variant
@@ -116,6 +117,7 @@ COMMON_TERMS: dict[str, str] = {
     "ডাকঘর": "Post Office",
     "ভাকঘর": "Post Office",      # OCR misreads ড (Da) as ভ (Bh)
     "ভাকখন": "Post Office",      # OCR variant
+    "ডাক্ষর": "Post Office",     # OCR variant
     "ডেমরা": "Demra",
     "পোস্ট অফিস": "Post Office",
     "পার্ট": "Part",

@@ -14,9 +14,13 @@ _LABEL_ADDRESS   = re.compile(r'ঠিকানা[:\s।]*')
 # anchor so any boilerplate ("this card is government property...") that OCR
 # merges in ahead of it is dropped rather than swept into the address.
 _LABEL_HOUSE     = re.compile(
-    r'(?:বাসা|বাড়ি)\s*/?\s*(?:হোল্ডিং|হোভিং)|House\s*/\s*Holding',
+    r'(?:বাসা|বাড়ি)\s*/?\s*(?:হোল্ডিং|হোভিং|হোতিং)|House\s*/\s*Holding',
     re.IGNORECASE,
 )
+# গ্রাম/রাস্তা (Village/Road): another label OCR reliably recognizes, used the
+# same way as _LABEL_HOUSE — as a restart anchor when it shows up mid-segment
+# behind unrecognized prefix text.
+_LABEL_VILLAGE   = re.compile(r'গ্রাম\s*/?\s*(?:রাস্তা|রন্তা|রাজ্ঞা)', re.IGNORECASE)
 _HAS_BANGLA      = re.compile(r'[ঀ-৿]')
 # Blood group: allow digits (OCR confuses A→4, O→0)
 _LABEL_BLOOD_EN  = re.compile(r'Blood\s*Group[:\s]*([A-Z0-9]{1,2}[+\-])', re.IGNORECASE)
@@ -43,9 +47,29 @@ _SPACE_SLASH     = re.compile(r'\s*/\s*')
 # OCR substitutions common in blood group values
 _BG_FIXES = str.maketrans({'4': 'A', '0': 'O', '|': 'I'})
 
+# A known label immediately followed by ';' — OCR sometimes puts a semicolon
+# where the label's own colon belongs (e.g. "গ্রাম/রাস্তা;"). Must be fixed to
+# ':' *before* the generic ';'->',' rule in _clean_address_text, or the label
+# loses its colon and gets merged into the surrounding address text instead.
+_LABEL_SEMICOLON = re.compile(
+    rf'((?:{_LABEL_HOUSE.pattern})|(?:{_LABEL_VILLAGE.pattern}))\s*;',
+    re.IGNORECASE,
+)
+
 
 def _normalize_blood_group(raw: str) -> str:
     return raw.strip().upper().translate(_BG_FIXES)
+
+
+def _slice_from_house(seg_s: str, house_m: re.Match) -> str:
+    # Anchor on the House/Holding match, but ensure it keeps a colon even when
+    # OCR dropped it entirely (label runs straight into the value with just a
+    # space, e.g. "বাসা/হোতিং ঠাকুর বাড়ি...").
+    label = seg_s[house_m.start():house_m.end()]
+    rest = seg_s[house_m.end():].lstrip()
+    if not rest.startswith(':'):
+        rest = f': {rest}' if rest else ':'
+    return f'{label}{rest}'.strip()
 
 
 def _is_address_stop(seg_s: str) -> bool:
@@ -67,7 +91,8 @@ def _clean_address_text(raw: str) -> str:
     raw = re.sub(r'[ऀ-ॿ]+', '', raw)
     raw = re.sub(r'\s+', ' ', raw)
     raw = _SPACE_SLASH.sub('/', raw)        # "বাসা /হোল্ডিং" → "বাসা/হোল্ডিং"
-    raw = raw.replace(';', ',')             # OCR misreads ',' as ';'
+    raw = _LABEL_SEMICOLON.sub(lambda m: m.group(1) + ':', raw)  # label's own ';' -> ':'
+    raw = raw.replace(';', ',')             # any other OCR misread of ',' as ';'
     raw = re.sub(r',\s*,', ',', raw)        # collapse consecutive commas
     # Segment joins add a comma before "- <pincode>" but it should be a space-dash.
     # e.g. "Para Dagair, - 1216" → "Para Dagair - 1216"
@@ -122,8 +147,7 @@ class BackFieldExtractor(FieldExtractor):
                 # more reliably than ঠিকানা, so it's the truer anchor.
                 in_address = True
                 address_parts = []
-                start = house_m.start() if house_m else addr_m.end()
-                inline = seg_s[start:].strip()
+                inline = _slice_from_house(seg_s, house_m) if house_m else seg_s[addr_m.end():].strip()
                 if inline:
                     address_parts.append(inline)
                 continue
@@ -202,7 +226,7 @@ class BackFieldExtractor(FieldExtractor):
             for i, s in enumerate(candidates):
                 house_m = _LABEL_HOUSE.search(s.strip())
                 if house_m:
-                    first = s.strip()[house_m.start():].strip()
+                    first = _slice_from_house(s.strip(), house_m)
                     candidates = ([first] if first else []) + list(candidates[i + 1:])
                     restarted = True
                     break
