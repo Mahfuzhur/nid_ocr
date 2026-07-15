@@ -1,3 +1,4 @@
+import base64
 import os
 import shutil
 import tempfile
@@ -44,7 +45,10 @@ class NIDFrontRouter:
             stored_path = save_upload(tmp_path, "front", file.filename)
 
             logger.info(f"Processing front NID: {file.filename} (ocr={ocr})")
-            result = self._service.process(tmp_path, ocr=ocr)
+            result, signature = self._service.process(tmp_path, ocr=ocr)
+            # signature (raw PNG bytes) is intentionally kept out of the
+            # persisted extracted_data — it would bloat the DB row and dump
+            # a base64 blob into the /uploads browsing page.
             record_upload("front", file.filename, str(stored_path) if stored_path else None, ocr, True, asdict(result))
             return NIDFrontResponse(
                 name=result.name,
@@ -53,6 +57,7 @@ class NIDFrontRouter:
                 spouse_name=result.spouse_name,
                 date_of_birth=result.date_of_birth,
                 nid_number=result.nid_number,
+                signature_base64=base64.b64encode(signature).decode() if signature else None,
             )
         except NIDOCRError as e:
             record_upload("front", file.filename, str(stored_path) if stored_path else None, ocr, False, error_message=str(e))
