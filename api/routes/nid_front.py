@@ -10,7 +10,7 @@ from nid_ocr.services.nid_front_service import NIDFrontService
 from nid_ocr.core.config import settings
 from nid_ocr.core.exceptions import NIDOCRError
 from nid_ocr.core.logging import get_logger
-from nid_ocr.core.storage import save_upload
+from nid_ocr.core.storage import save_upload, save_bytes
 from nid_ocr.core.db import record_upload
 
 logger = get_logger(__name__)
@@ -46,10 +46,20 @@ class NIDFrontRouter:
 
             logger.info(f"Processing front NID: {file.filename} (ocr={ocr})")
             result, signature = self._service.process(tmp_path, ocr=ocr)
-            # signature (raw PNG bytes) is intentionally kept out of the
-            # persisted extracted_data — it would bloat the DB row and dump
-            # a base64 blob into the /uploads browsing page.
-            record_upload("front", file.filename, str(stored_path) if stored_path else None, ocr, True, asdict(result))
+            # The signature crop is saved as its own file (like the original
+            # upload) and its path recorded separately from extracted_data —
+            # keeping the base64 blob out of that JSON column avoids bloating
+            # the DB row and dumping raw base64 text into the /uploads page's
+            # field list; the dedicated signature_path lets that page render
+            # it as an image thumbnail instead, the same way it already does
+            # for the original upload.
+            signature_stored_path = (
+                save_bytes(signature, "signatures", f"{file.filename}.png") if signature else None
+            )
+            record_upload(
+                "front", file.filename, str(stored_path) if stored_path else None, ocr, True, asdict(result),
+                signature_path=str(signature_stored_path) if signature_stored_path else None,
+            )
             return NIDFrontResponse(
                 name=result.name,
                 father_name=result.father_name,

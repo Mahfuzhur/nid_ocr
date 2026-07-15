@@ -56,6 +56,7 @@ def init_db() -> None:
                         side VARCHAR(10) NOT NULL,
                         original_filename VARCHAR(255) NOT NULL,
                         stored_path VARCHAR(500),
+                        signature_path VARCHAR(500),
                         ocr_engine VARCHAR(50),
                         success TINYINT(1) NOT NULL,
                         extracted_data JSON,
@@ -66,6 +67,18 @@ def init_db() -> None:
                         INDEX idx_created_at (created_at)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                 """)
+                # Table may already exist from before signature_path was added.
+                # Vanilla MySQL has no ADD COLUMN IF NOT EXISTS (that's a
+                # MariaDB extension), so check information_schema instead.
+                cur.execute(
+                    "SELECT COUNT(*) AS c FROM information_schema.columns "
+                    "WHERE table_schema = DATABASE() AND table_name = 'ocr_uploads' "
+                    "AND column_name = 'signature_path'"
+                )
+                if cur.fetchone()["c"] == 0:
+                    cur.execute(
+                        "ALTER TABLE ocr_uploads ADD COLUMN signature_path VARCHAR(500) AFTER stored_path"
+                    )
         finally:
             conn.close()
         logger.info("Database ready (ocr_uploads table verified).")
@@ -81,6 +94,7 @@ def record_upload(
     success: bool,
     extracted_data: dict | None = None,
     error_message: str | None = None,
+    signature_path: str | None = None,
 ) -> None:
     """Insert one row per processed upload. Never raises — a logging failure
     shouldn't affect the OCR response already computed for the caller."""
@@ -91,13 +105,14 @@ def record_upload(
                 cur.execute(
                     """
                     INSERT INTO ocr_uploads
-                        (side, original_filename, stored_path, ocr_engine, success, extracted_data, error_message)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        (side, original_filename, stored_path, signature_path, ocr_engine, success, extracted_data, error_message)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         side,
                         original_filename,
                         stored_path,
+                        signature_path,
                         ocr_engine,
                         1 if success else 0,
                         json.dumps(extracted_data) if extracted_data is not None else None,
@@ -160,7 +175,7 @@ def query_uploads(
 
             cur.execute(
                 f"""
-                SELECT id, side, original_filename, stored_path, ocr_engine,
+                SELECT id, side, original_filename, stored_path, signature_path, ocr_engine,
                        success, extracted_data, error_message, created_at
                 FROM ocr_uploads
                 {where_clause}

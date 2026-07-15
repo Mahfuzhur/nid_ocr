@@ -28,6 +28,13 @@ class UploadsRouter:
             summary="Fetch the stored image for an upload record",
             include_in_schema=False,
         )
+        self.router.add_api_route(
+            "/uploads/{record_id}/signature",
+            self._signature,
+            methods=["GET"],
+            summary="Fetch the extracted signature crop for an upload record",
+            include_in_schema=False,
+        )
 
     async def _list(
         self,
@@ -70,6 +77,18 @@ class UploadsRouter:
             raise HTTPException(status_code=404, detail="Image not found.")
         return FileResponse(row["stored_path"])
 
+    async def _signature(self, record_id: int):
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT signature_path FROM ocr_uploads WHERE id = %s", (record_id,))
+                row = cur.fetchone()
+        finally:
+            conn.close()
+        if not row or not row["signature_path"]:
+            raise HTTPException(status_code=404, detail="Signature not found.")
+        return FileResponse(row["signature_path"])
+
     def _render(self, rows, total, side, status, date_from, date_to, search, page) -> str:
         filters = {
             "side": side or "",
@@ -84,7 +103,7 @@ class UploadsRouter:
             return f'<option value="{value}"{selected}>{label}</option>'
 
         table_rows = "\n".join(self._render_row(r) for r in rows) or (
-            '<tr><td colspan="6" class="empty">No uploads match these filters.</td></tr>'
+            '<tr><td colspan="7" class="empty">No uploads match these filters.</td></tr>'
         )
 
         total_pages = max((total + PAGE_SIZE - 1) // PAGE_SIZE, 1)
@@ -120,12 +139,14 @@ class UploadsRouter:
   .thumb-toggle {{ display: none; }}
   .thumb {{ width: 44px; height: 44px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;
             transition: all 0.15s ease; }}
+  .thumb.sig-thumb {{ width: 80px; height: 32px; object-fit: contain; background: #fff; }}
   .thumb-toggle:checked ~ .thumb {{
     width: 340px; height: 340px; object-fit: contain; background: #fff;
     position: absolute; top: 50%; left: 0; transform: translateY(-50%);
     z-index: 20; border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.35);
     cursor: zoom-out;
   }}
+  .thumb-toggle:checked ~ .sig-thumb {{ width: 300px; height: 120px; }}
 </style>
 </head>
 <body>
@@ -161,7 +182,7 @@ class UploadsRouter:
 <table>
   <thead>
     <tr>
-      <th>ID</th><th>Side</th><th>Filename</th><th>Uploaded</th><th>Status</th><th>Extracted Data</th>
+      <th>ID</th><th>Side</th><th>Filename</th><th>Uploaded</th><th>Status</th><th>Signature</th><th>Extracted Data</th>
     </tr>
   </thead>
   <tbody>
@@ -197,12 +218,20 @@ class UploadsRouter:
             if row["stored_path"] else "—"
         )
 
+        signature_link = (
+            f'<label class="thumb-wrap">'
+            f'<input type="checkbox" class="thumb-toggle">'
+            f'<img class="thumb sig-thumb" src="/uploads/{row["id"]}/signature" alt="signature" loading="lazy"></label>'
+            if row.get("signature_path") else "—"
+        )
+
         return f"""<tr>
       <td>{row['id']}</td>
       <td>{escape(row['side'])}</td>
       <td>{escape(row['original_filename'])} {image_link}</td>
       <td>{created_s}</td>
       <td>{badge}</td>
+      <td>{signature_link}</td>
       <td>{details}</td>
     </tr>"""
 

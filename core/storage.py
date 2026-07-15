@@ -20,3 +20,17 @@ def save_upload(tmp_path: str, subfolder: str, original_filename: str) -> Path |
     except Exception:
         logger.exception(f"Failed to save permanent copy of {original_filename}")
         return None
+
+
+def save_bytes(data: bytes, subfolder: str, filename: str) -> Path | None:
+    """Write raw bytes (e.g. a derived crop, not an uploaded file) into
+    permanent storage. Never raises, same rationale as save_upload."""
+    try:
+        dest_dir = Path(settings.upload_storage_dir) / subfolder
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = dest_dir / f"{uuid.uuid4().hex[:8]}_{filename}"
+        dest_path.write_bytes(data)
+        return dest_path
+    except Exception:
+        logger.exception(f"Failed to save {filename}")
+        return None
