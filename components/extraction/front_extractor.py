@@ -1,3 +1,4 @@
+import difflib
 import re
 from .base import FieldExtractor
 from nid_ocr.domain.enums import NIDFormat
@@ -25,7 +26,8 @@ _LABEL_NID_NEW = re.compile(r'NID\s*No[\.;]?[:\s]*(.+)', re.IGNORECASE)
 
 # Fuzzy label matchers — handle stamp/noise garbling (prefix match + short segment)
 _FATHER_FUZZY = re.compile(r'পিত|স্বামী')
-_MOTHER_FUZZY = re.compile(r'মাত|যাতা')
+# থাতা/ঘাতা: single-consonant misreads of মাতা seen from sharpened-variant OCR passes
+_MOTHER_FUZZY = re.compile(r'মাত|যাতা|থাতা|ঘাতা')
 _SPOUSE_FUZZY = re.compile(r'পত্নী')
 
 _DOB_PATTERN = re.compile(r'\d{1,2}\s+[A-Za-z]{3}\s+\d{4}')
@@ -34,6 +36,9 @@ _DIGIT_ONLY  = re.compile(r'\d{8,17}')
 _HEADER_NOISE = re.compile(
     r'Government|Bangladesh|National|Republic|People|জাতীয়|পরিচয়|গণপ্রজাতন্ত্রী|বাংলাদেশ|সরকার',
     re.IGNORECASE,
+)
+_ADDRESS_NOISE = re.compile(
+    r'ঠিকানা|গ্রাম|রাস্তা|বাসা|হোল্ডিং|জেলা|উপজেলা|রক্তের|প্রদান|স্বাক্ষর|মেয়াদ',
 )
 
 
@@ -54,13 +59,60 @@ def _next_non_empty(segments: list[str], idx: int, window: int = 3) -> str | Non
     return None
 
 
-def _next_bangla(segments: list[str], idx: int, window: int = 4) -> str | None:
-    """Return the first segment within window that has ≥2 Bengali words."""
-    for i in range(idx + 1, min(idx + window + 1, len(segments))):
-        c = _clean(segments[i])
-        if c and _is_bangla(c) and len(c.split()) >= 2:
-            return c
-    return None
+# How similar a candidate's transliteration must be to the person's own English
+# name before it's treated as a repeat of that name (from another OCR variant)
+# rather than a distinct family member. Deliberately high: father/mother often
+# share the person's surname and title (e.g. "কাজী মোঃ ... রশিদ"), so a low bar
+# would wrongly exclude legitimate matches.
+_OWN_NAME_SIMILARITY_CUTOFF = 0.78
+
+
+def _nearest_unclaimed_bangla(
+    segments: list[str],
+    idx: int,
+    claimed: set[str],
+    transliterate=None,
+    own_name_en: str | None = None,
+) -> str | None:
+    """Return the Bengali person-name-like segment nearest (by index distance) to idx
+    that hasn't already been claimed by another field.
+
+    Merging OCR segments from multiple preprocessed variants means a label and its
+    value can end up far apart in the merged list (the value may even have already
+    appeared *earlier*, from a different variant's pass, than the label that names
+    it) — so this scans the full list by distance rather than a small forward window.
+    That also means an unlabeled repeat of a name already assigned to another field
+    (garbled slightly differently by another variant's OCR pass) can be numerically
+    closer to a label than the real value. `claimed` only catches exact-string
+    repeats, so this also filters by transliteration similarity against both the
+    person's own English name and every already-claimed Bengali value, to catch
+    near-duplicates the exact-match check misses.
+    """
+    reference_names_en = [own_name_en] if own_name_en else []
+    if transliterate:
+        reference_names_en += [transliterate(v) or '' for v in claimed]
+
+    best = None
+    best_dist = None
+    for i, s in enumerate(segments):
+        if i == idx:
+            continue
+        c = _clean(s)
+        if not c or c in claimed:
+            continue
+        if not _is_bangla(c) or _HEADER_NOISE.search(c) or len(c.split()) < 2:
+            continue
+        if transliterate and reference_names_en:
+            translit = (transliterate(c) or '').lower()
+            if any(
+                difflib.SequenceMatcher(None, translit, ref.lower()).ratio() > _OWN_NAME_SIMILARITY_CUTOFF
+                for ref in reference_names_en
+            ):
+                continue
+        dist = abs(i - idx)
+        if best_dist is None or dist < best_dist:
+            best, best_dist = c, dist
+    return best
 
 
 _NAME_JUNK = re.compile(r'\b(?:ID|Card|National|Republic|Bangladesh|Government)\b', re.IGNORECASE)
@@ -106,6 +158,10 @@ class FrontFieldExtractor(FieldExtractor):
         spouse_bn     = None
         date_of_birth = None
         nid_number    = None
+        # Bengali values already assigned to a field, so the same OCR segment
+        # (or its near-duplicate from another preprocessed variant) can't also
+        # be picked up for a different field by the nearest-match search below.
+        claimed: set[str] = set()
 
         for idx, seg in enumerate(segments):
             s = seg.strip()
@@ -120,6 +176,8 @@ class FrontFieldExtractor(FieldExtractor):
                     c = _next_non_empty(segments, idx)
                     if c and _is_bangla(c):
                         name_bn = c
+                if name_bn:
+                    claimed.add(name_bn)
 
             # ── English name (explicit label) ────────────────────────────────
             m = _LABEL_NAME_EN.match(s)
@@ -142,12 +200,18 @@ class FrontFieldExtractor(FieldExtractor):
                 if inline and _is_bangla(inline):
                     father_bn = inline
                 else:
-                    father_bn = _next_bangla(segments, idx)
+                    father_bn = _nearest_unclaimed_bangla(
+                        segments, idx, claimed, self._tr.transliterate, name_en)
+                if father_bn:
+                    claimed.add(father_bn)
 
             # Fuzzy father label (garbled stamp: '[পঙ|', 'পিত', etc.)
             elif (not father_bn and _is_short_bangla_segment(s)
                   and _FATHER_FUZZY.search(s) and not _LABEL_MOTHER.match(s)):
-                father_bn = _next_bangla(segments, idx)
+                father_bn = _nearest_unclaimed_bangla(
+                    segments, idx, claimed, self._tr.transliterate, name_en)
+                if father_bn:
+                    claimed.add(father_bn)
 
             # ── Mother (exact label) ─────────────────────────────────────────
             m = _LABEL_MOTHER.match(s)
@@ -156,12 +220,18 @@ class FrontFieldExtractor(FieldExtractor):
                 if inline and _is_bangla(inline):
                     mother_bn = inline
                 else:
-                    mother_bn = _next_bangla(segments, idx)
+                    mother_bn = _nearest_unclaimed_bangla(
+                        segments, idx, claimed, self._tr.transliterate, name_en)
+                if mother_bn:
+                    claimed.add(mother_bn)
 
             # Fuzzy mother label (garbled stamp: 'মাত', '[মাত|', etc.)
             elif (not mother_bn and _is_short_bangla_segment(s)
                   and _MOTHER_FUZZY.search(s) and not _LABEL_FATHER.match(s)):
-                mother_bn = _next_bangla(segments, idx)
+                mother_bn = _nearest_unclaimed_bangla(
+                    segments, idx, claimed, self._tr.transliterate, name_en)
+                if mother_bn:
+                    claimed.add(mother_bn)
 
             # ── Spouse ──────────────────────────────────────────────────────
             m = _LABEL_SPOUSE.match(s)
@@ -173,11 +243,14 @@ class FrontFieldExtractor(FieldExtractor):
                     c = _next_non_empty(segments, idx)
                     if c and _is_bangla(c):
                         spouse_bn = c
+                if spouse_bn:
+                    claimed.add(spouse_bn)
             elif (not spouse_bn and _is_short_bangla_segment(s)
                   and _SPOUSE_FUZZY.search(s)):
                 c = _next_non_empty(segments, idx)
                 if c and _is_bangla(c):
                     spouse_bn = c
+                    claimed.add(spouse_bn)
 
             # ── Date of Birth ─────────────────────────────────────────────────
             if not date_of_birth:
@@ -222,32 +295,55 @@ class FrontFieldExtractor(FieldExtractor):
                     break
 
         # ── Positional fallback: assign Bengali names in appearance order ──
-        # Only needed if label-based extraction missed any field.
-        # Limit search to segments before the first DOB/NID line so address
-        # text on combined images (or noisy trailer segments) doesn't pollute.
+        # Only needed if label-based extraction missed any field. Segment order
+        # doesn't reliably follow visual card layout once OCR results from
+        # multiple preprocessed variants are merged (a DOB/NID line can precede
+        # the name lines in the merged list even though it follows them on the
+        # card), so this filters by content — excluding address-block text and
+        # anything already claimed by a label match — rather than cutting the
+        # list off at the first DOB/NID occurrence by position.
         if not (name_bn or name_en) or not father_bn or not mother_bn:
-            cutoff = len(segments)
-            for i, s2 in enumerate(segments):
-                if (_LABEL_DOB.search(s2) or _LABEL_NID_OLD.search(s2)
-                        or _LABEL_NID_NEW.search(s2)):
-                    cutoff = i
-                    break
+            bn_names = [s2.strip() for s2 in segments
+                        if _looks_like_person_name_bn(s2)
+                        and s2.strip() not in claimed
+                        and not _ADDRESS_NOISE.search(s2)]
 
-            bn_names = [s2.strip() for s2 in segments[:cutoff]
-                        if _looks_like_person_name_bn(s2)]
+            # A label-less repeat of the person's own name (found only via name_en,
+            # so never added to `claimed`) would otherwise occupy the first slot
+            # below and push father/mother/spouse candidates one position off.
+            if name_en:
+                bn_names = [
+                    c for c in bn_names
+                    if difflib.SequenceMatcher(
+                        None, (self._tr.transliterate(c) or '').lower(), name_en.lower()
+                    ).ratio() <= _OWN_NAME_SIMILARITY_CUTOFF
+                ]
 
-            if bn_names and not name_bn and not name_en:
-                name_bn = bn_names[0]
-                logger.info(f"Positional name (bn): {name_bn}")
-            if len(bn_names) > 1 and not father_bn:
-                father_bn = bn_names[1]
-                logger.info(f"Positional father: {father_bn}")
-            if len(bn_names) > 2 and not mother_bn:
-                mother_bn = bn_names[2]
-                logger.info(f"Positional mother: {mother_bn}")
-            if len(bn_names) > 3 and not spouse_bn:
-                spouse_bn = bn_names[3]
-                logger.info(f"Positional spouse: {spouse_bn}")
+            # Fill only the roles still unresolved, in card order, so a role
+            # already settled by a label match doesn't consume a positional slot
+            # meant for the next candidate (e.g. father found via label, mother
+            # not — the next candidate should fill mother, not be skipped because
+            # it isn't at a fixed index 2).
+            empty_roles = []
+            if not name_bn and not name_en:
+                empty_roles.append('name')
+            if not father_bn:
+                empty_roles.append('father')
+            if not mother_bn:
+                empty_roles.append('mother')
+            if not spouse_bn:
+                empty_roles.append('spouse')
+
+            for role, candidate in zip(empty_roles, bn_names):
+                if role == 'name':
+                    name_bn = candidate
+                elif role == 'father':
+                    father_bn = candidate
+                elif role == 'mother':
+                    mother_bn = candidate
+                elif role == 'spouse':
+                    spouse_bn = candidate
+                logger.info(f"Positional {role}: {candidate}")
 
         # ── Transliterate Bengali fields ──────────────────────────────────
         return {

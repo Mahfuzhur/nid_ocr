@@ -32,7 +32,7 @@ class NIDFrontService:
 
             all_segments: list[str] = []
             seen: set[str] = set()
-            paths = [image_path] if getattr(engine, 'prefers_original_image', False) else list(variants.values())
+            paths = [image_path] + list(variants.values()) if getattr(engine, 'prefers_original_image', False) else list(variants.values())
             for path in paths:
                 for seg in engine.extract(path):
                     if seg not in seen:
