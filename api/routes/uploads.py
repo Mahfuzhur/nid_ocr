@@ -69,7 +69,7 @@ class UploadsRouter:
             return f'<option value="{value}"{selected}>{label}</option>'
 
         table_rows = "\n".join(self._render_row(r) for r in rows) or (
-            '<tr><td colspan="7" class="empty">No uploads match these filters.</td></tr>'
+            '<tr><td colspan="6" class="empty">No uploads match these filters.</td></tr>'
         )
 
         total_pages = max((total + PAGE_SIZE - 1) // PAGE_SIZE, 1)
@@ -146,7 +146,7 @@ class UploadsRouter:
 <table>
   <thead>
     <tr>
-      <th>ID</th><th>Side</th><th>Filename</th><th>Uploaded</th><th>Engine</th><th>Status</th><th>Extracted Data</th>
+      <th>ID</th><th>Side</th><th>Filename</th><th>Uploaded</th><th>Status</th><th>Extracted Data</th>
     </tr>
   </thead>
   <tbody>
@@ -187,7 +187,6 @@ class UploadsRouter:
       <td>{escape(row['side'])}</td>
       <td>{escape(row['original_filename'])} {image_link}</td>
       <td>{created_s}</td>
-      <td>{escape(row['ocr_engine'] or '')}</td>
       <td>{badge}</td>
       <td>{details}</td>
     </tr>"""
