@@ -10,8 +10,8 @@ from nid_ocr.domain.enums import NIDFormat
 # per format since SMART (chip) and OLD (laminated) cards use different
 # physical layouts/proportions.
 _FACE_MARGINS = {
-    NIDFormat.SMART: dict(right=0.14, below=0.17),
-    NIDFormat.OLD:   dict(right=0.50, below=0.30),
+    NIDFormat.SMART: dict(right=0.12, below=0.17),
+    NIDFormat.OLD:   dict(right=0.45, below=0.30),
 }
 
 _face_cascade = None
