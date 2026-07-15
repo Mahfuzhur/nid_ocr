@@ -33,15 +33,30 @@ class UploadsRouter:
         self,
         side: str | None = Query(None),
         status: str | None = Query(None),
-        date_from: date | None = Query(None),
-        date_to: date | None = Query(None),
+        date_from: str | None = Query(None),
+        date_to: str | None = Query(None),
         search: str | None = Query(None),
         page: int = Query(1, ge=1),
     ) -> HTMLResponse:
+        # The filter form always submits date_from/date_to (blank if unset), and
+        # FastAPI's `date | None` query type rejects an empty string outright —
+        # producing a raw 422 JSON error instead of the page for every filtered
+        # request. Parse manually so blank/invalid input is treated as unset.
+        df = self._parse_date(date_from)
+        dt = self._parse_date(date_to)
         rows, total = query_uploads(
-            side=side, status=status, date_from=date_from, date_to=date_to, search=search, page=page,
+            side=side, status=status, date_from=df, date_to=dt, search=search, page=page,
         )
-        return HTMLResponse(self._render(rows, total, side, status, date_from, date_to, search, page))
+        return HTMLResponse(self._render(rows, total, side, status, df, dt, search, page))
+
+    @staticmethod
+    def _parse_date(raw: str | None) -> date | None:
+        if not raw:
+            return None
+        try:
+            return date.fromisoformat(raw)
+        except ValueError:
+            return None
 
     async def _image(self, record_id: int):
         conn = get_connection()

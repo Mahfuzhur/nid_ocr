@@ -139,7 +139,13 @@ def query_uploads(
         params.append(datetime.combine(date_to, datetime.max.time()))
 
     if search:
-        where.append("(original_filename LIKE %s OR JSON_SEARCH(extracted_data, 'one', %s) IS NOT NULL)")
+        # JSON_SEARCH compares JSON string values using a binary (case-sensitive)
+        # collation regardless of the column's own collation, so a search for
+        # "Kazi" would silently miss a stored "KAZI MD JUKRUF...". Casting to
+        # CHAR and comparing with LOWER()/LIKE searches the same JSON text but
+        # case-insensitively, matching what the "name, NID number..." placeholder
+        # implies.
+        where.append("(original_filename LIKE %s OR LOWER(CAST(extracted_data AS CHAR)) LIKE LOWER(%s))")
         like = f"%{search}%"
         params.extend([like, like])
 
