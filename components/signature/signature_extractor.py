@@ -2,7 +2,6 @@ import cv2
 
 from nid_ocr.components.signature.card_locator import locate_card
 from nid_ocr.components.signature.photo_locator import detect_largest_face
-from nid_ocr.components.signature.ink_bounds import find_signature_row_band, find_ink_right_edge
 from nid_ocr.domain.enums import NIDFormat
 from nid_ocr.core.logging import get_logger
 
@@ -13,13 +12,18 @@ logger = get_logger(__name__)
 # card's bottom edge (there's reliably clear whitespace there).
 _SMART_MARGINS = dict(right=0.12, below=0.17)
 
-# OLD (laminated) cards pack "Date of Birth"/"ID NO" text much closer beneath
-# the signature — different OLD templates by different margins, so no single
-# fixed ratio works for all of them (confirmed against two real cards with
-# very different needed margins). find_signature_row_band/find_ink_right_edge
-# locate the actual ink content instead. These fixed ratios are only the
-# fallback if that content-based search doesn't find a plausible signature.
-_OLD_FALLBACK = dict(right=0.45, below=0.30, height=0.06)
+# OLD (laminated) cards: different OLD templates need different margins, and
+# content-based ink scanning (row-variance band search, column-gap search)
+# proved unreliable across real uploads — false-positive bands, seams left
+# by card_locator's perspective warp misread as ink, search-width ceilings
+# silently accepted as real edges. Replaced with a fixed box sized as a
+# fraction of the card's own detected width/height, measured against
+# hand-boxed reference signature crops on real cards and consistent
+# regardless of the photo's resolution or framing. Only the vertical anchor
+# (below the detected face) still depends on the face box.
+_OLD_FALLBACK = dict(below=0.30)
+_CARD_WIDTH_FRACTION = 0.28  # of card width, anchored at x=0
+_CARD_HEIGHT_FRACTION = 0.30  # of card height
 
 # Fallback region if no face is detected at all, for either format.
 _NO_FACE_FALLBACK = {
@@ -47,7 +51,7 @@ class SignatureExtractor:
             x0, x1 = int(w * region["x0"]), int(w * region["x1"])
             y0, y1 = int(h * region["y0"]), int(h * region["y1"])
         elif fmt == NIDFormat.OLD:
-            x0, x1, y0, y1 = self._old_format_bounds(card, face, w, h)
+            x0, x1, y0, y1 = self._old_format_bounds(face, w, h)
         else:
             x0, x1, y0, y1 = self._smart_format_bounds(face, h)
 
@@ -69,24 +73,11 @@ class SignatureExtractor:
         y0 = int(fy + fh + fh * _SMART_MARGINS["below"])
         return 0, x1, y0, h  # run to the card's bottom edge
 
-    def _old_format_bounds(self, card, face, w: int, h: int) -> tuple[int, int, int, int]:
+    @staticmethod
+    def _old_format_bounds(face: tuple[int, int, int, int], w: int, h: int) -> tuple[int, int, int, int]:
         fx, fy, fw, fh = face
         face_bottom = fy + fh
-        gray = cv2.cvtColor(card, cv2.COLOR_BGR2GRAY)
-
-        band = find_signature_row_band(gray, x1=fx + fw, y_start=face_bottom, y_end=h)
-        if band is not None:
-            sig_start, sig_end = band
-            y0 = max(0, face_bottom + sig_start - 4)
-            y1 = min(h, face_bottom + sig_end + 3)
-
-            x1_search = min(w, int(w * 0.55))
-            x1 = find_ink_right_edge(gray[y0:y1, 0:x1_search]) + 6
-            x1 = min(x1_search, x1)
-            return 0, x1, y0, y1
-
-        logger.info("Signature extraction: row-band search failed, using OLD-format fallback ratios")
-        x1 = int(fx + fw + fw * _OLD_FALLBACK["right"])
+        x1 = int(w * _CARD_WIDTH_FRACTION)
         y0 = int(face_bottom + fh * _OLD_FALLBACK["below"])
-        y1 = min(h, int(y0 + h * _OLD_FALLBACK["height"]))
+        y1 = min(h, int(y0 + h * _CARD_HEIGHT_FRACTION))
         return 0, x1, y0, y1
