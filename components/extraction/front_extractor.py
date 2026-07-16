@@ -30,6 +30,13 @@ _FATHER_FUZZY = re.compile(r'পিত|স্বামী')
 _MOTHER_FUZZY = re.compile(r'মাত|যাতা|থাতা|ঘাতা')
 _SPOUSE_FUZZY = re.compile(r'পত্নী')
 
+# Markers used exclusively in feminine Bengali names/honorifics on Bangladeshi
+# NIDs (never in a father's/husband's name) — used by the positional fallback
+# below to tell "this candidate is genuinely the mother's name" apart from
+# "the father's own OCR dropped out and this candidate just shifted forward
+# into that slot."
+_FEMININE_NAME_MARKER = re.compile(r'বেগম|খাতুন|নেছা|নেসা|^মোছাঃ|^মোসাম্মৎ|^মোসাঃ')
+
 _DOB_PATTERN = re.compile(r'\d{1,2}\s+[A-Za-z]{3}\s+\d{4}')
 _DIGIT_ONLY  = re.compile(r'\d{8,17}')
 
@@ -87,13 +94,18 @@ def _nearest_unclaimed_bangla(
     repeats, so this also filters by transliteration similarity against both the
     person's own English name and every already-claimed Bengali value, to catch
     near-duplicates the exact-match check misses.
+
+    On a distance tie (e.g. a neighboring field's value sits immediately before
+    the label, its own value immediately after), the candidate after the label
+    wins — that's how these cards are actually laid out (label, then its value),
+    so preferring "after" resolves ties in the direction that's actually correct
+    rather than an arbitrary index-order pick.
     """
     reference_names_en = [own_name_en] if own_name_en else []
     if transliterate:
         reference_names_en += [transliterate(v) or '' for v in claimed]
 
-    best = None
-    best_dist = None
+    candidates = []
     for i, s in enumerate(segments):
         if i == idx:
             continue
@@ -109,10 +121,12 @@ def _nearest_unclaimed_bangla(
                 for ref in reference_names_en
             ):
                 continue
-        dist = abs(i - idx)
-        if best_dist is None or dist < best_dist:
-            best, best_dist = c, dist
-    return best
+        candidates.append((abs(i - idx), 0 if i > idx else 1, c))
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda t: (t[0], t[1]))
+    return candidates[0][2]
 
 
 _NAME_JUNK = re.compile(r'\b(?:ID|Card|National|Republic|Bangladesh|Government)\b', re.IGNORECASE)
@@ -319,31 +333,36 @@ class FrontFieldExtractor(FieldExtractor):
                     ).ratio() <= _OWN_NAME_SIMILARITY_CUTOFF
                 ]
 
-            # Fill only the roles still unresolved, in card order, so a role
-            # already settled by a label match doesn't consume a positional slot
-            # meant for the next candidate (e.g. father found via label, mother
-            # not — the next candidate should fill mother, not be skipped because
-            # it isn't at a fixed index 2).
-            empty_roles = []
-            if not name_bn and not name_en:
-                empty_roles.append('name')
-            if not father_bn:
-                empty_roles.append('father')
-            if not mother_bn:
-                empty_roles.append('mother')
-            if not spouse_bn:
-                empty_roles.append('spouse')
+            # Card order is fixed — নাম, then পিতা/স্বামী, then মাতা, then
+            # পত্নী — but a role's OCR can drop out entirely (not just go
+            # unlabeled), which shifts every candidate after it forward by
+            # one position. Filling strictly by list order would then hand
+            # the next role's candidate to the wrong slot (e.g. the mother's
+            # name landing in father_name). So `remaining` is consumed by
+            # content where a role has a distinguishing marker (father/mother
+            # via _FEMININE_NAME_MARKER), and by plain order otherwise.
+            remaining = list(bn_names)
 
-            for role, candidate in zip(empty_roles, bn_names):
-                if role == 'name':
-                    name_bn = candidate
-                elif role == 'father':
-                    father_bn = candidate
-                elif role == 'mother':
-                    mother_bn = candidate
-                elif role == 'spouse':
-                    spouse_bn = candidate
-                logger.info(f"Positional {role}: {candidate}")
+            if not name_bn and not name_en and remaining:
+                name_bn = remaining.pop(0)
+                logger.info(f"Positional name: {name_bn}")
+
+            if not father_bn:
+                idx = next((i for i, c in enumerate(remaining) if not _FEMININE_NAME_MARKER.search(c)), None)
+                if idx is not None:
+                    father_bn = remaining.pop(idx)
+                    logger.info(f"Positional father: {father_bn}")
+
+            if not mother_bn:
+                idx = next((i for i, c in enumerate(remaining) if _FEMININE_NAME_MARKER.search(c)),
+                           0 if remaining else None)
+                if idx is not None:
+                    mother_bn = remaining.pop(idx)
+                    logger.info(f"Positional mother: {mother_bn}")
+
+            if not spouse_bn and remaining:
+                spouse_bn = remaining.pop(0)
+                logger.info(f"Positional spouse: {spouse_bn}")
 
         # ── Transliterate Bengali fields ──────────────────────────────────
         return {
