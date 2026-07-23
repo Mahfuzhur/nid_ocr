@@ -323,15 +323,27 @@ class FrontFieldExtractor(FieldExtractor):
                         and not _ADDRESS_NOISE.search(s2)]
 
             # A label-less repeat of the person's own name (found only via name_en,
-            # so never added to `claimed`) would otherwise occupy the first slot
-            # below and push father/mother/spouse candidates one position off.
-            if name_en:
-                bn_names = [
-                    c for c in bn_names
-                    if difflib.SequenceMatcher(
-                        None, (self._tr.transliterate(c) or '').lower(), name_en.lower()
-                    ).ratio() <= _OWN_NAME_SIMILARITY_CUTOFF
-                ]
+            # so never added to `claimed`), or of a role that's about to be filled
+            # positionally below (father/mother OCR'd twice, slightly differently
+            # garbled, by two preprocessed variants — the two copies sit side by
+            # side in `bn_names` since neither was ever claimed by a label match),
+            # would otherwise occupy an extra slot and either push later candidates
+            # one position off or get wrongly assigned as e.g. spouse. Dedup by
+            # transliteration similarity against every candidate already kept,
+            # seeded with the person's own English name, so only the first-seen
+            # copy of each distinct person survives.
+            kept_translits = [name_en] if name_en else []
+            deduped = []
+            for c in bn_names:
+                translit = (self._tr.transliterate(c) or '').lower()
+                if any(
+                    difflib.SequenceMatcher(None, translit, ref.lower()).ratio() > _OWN_NAME_SIMILARITY_CUTOFF
+                    for ref in kept_translits
+                ):
+                    continue
+                deduped.append(c)
+                kept_translits.append(translit)
+            bn_names = deduped
 
             # Card order is fixed — নাম, then পিতা/স্বামী, then মাতা, then
             # পত্নী — but a role's OCR can drop out entirely (not just go
