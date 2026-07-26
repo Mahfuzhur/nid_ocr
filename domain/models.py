@@ -9,6 +9,10 @@ class NIDFrontData:
     spouse_name: str | None = None
     date_of_birth: str | None = None
     nid_number: str | None = None
+    name_bn: str | None = None
+    father_name_bn: str | None = None
+    mother_name_bn: str | None = None
+    spouse_name_bn: str | None = None
 
 
 @dataclass
