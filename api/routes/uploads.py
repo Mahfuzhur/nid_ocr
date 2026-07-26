@@ -12,9 +12,8 @@ logger = get_logger(__name__)
 
 # Display order for the Extracted Data column's name-related fields, pairing
 # each transliterated field with its original Bengali OCR text as its own
-# row directly after (or, for the person's own name, before) it.
+# row directly after it.
 _NAME_FIELD_ORDER = [
-    ("bangla_name", "name_bn"),
     ("name", "name"),
     ("nid_number", "nid_number"),
     ("father_name", "father_name"),
@@ -25,7 +24,12 @@ _NAME_FIELD_ORDER = [
     ("spouse_bangla_name", "spouse_name_bn"),
     ("date_of_birth", "date_of_birth"),
 ]
-_NAME_FIELD_KEYS = {key for _, key in _NAME_FIELD_ORDER}
+# The person's own Bangla name (name_bn) is already shown as an image in the
+# dedicated "Bangla Name" column, so it's excluded here rather than repeated
+# as text — but still needs to be skipped in the generic fallback loop below,
+# not just left out of the display order.
+_HIDDEN_KEYS = {"name_bn"}
+_NAME_FIELD_KEYS = {key for _, key in _NAME_FIELD_ORDER} | _HIDDEN_KEYS
 
 
 class UploadsRouter:
