@@ -45,20 +45,24 @@ class NIDFrontRouter:
             stored_path = save_upload(tmp_path, "front", file.filename)
 
             logger.info(f"Processing front NID: {file.filename} (ocr={ocr})")
-            result, signature = self._service.process(tmp_path, ocr=ocr)
-            # The signature crop is saved as its own file (like the original
-            # upload) and its path recorded separately from extracted_data —
-            # keeping the base64 blob out of that JSON column avoids bloating
-            # the DB row and dumping raw base64 text into the /uploads page's
-            # field list; the dedicated signature_path lets that page render
-            # it as an image thumbnail instead, the same way it already does
-            # for the original upload.
+            result, signature, bangla_name = self._service.process(tmp_path, ocr=ocr)
+            # The signature/Bangla-name crops are each saved as their own file
+            # (like the original upload) and their paths recorded separately
+            # from extracted_data — keeping the base64 blobs out of that JSON
+            # column avoids bloating the DB row and dumping raw base64 text
+            # into the /uploads page's field list; the dedicated *_path
+            # columns let that page render them as image thumbnails instead,
+            # the same way it already does for the original upload.
             signature_stored_path = (
                 save_bytes(signature, "signatures", f"{file.filename}.png") if signature else None
+            )
+            bangla_name_stored_path = (
+                save_bytes(bangla_name, "bangla_names", f"{file.filename}.png") if bangla_name else None
             )
             record_upload(
                 "front", file.filename, str(stored_path) if stored_path else None, ocr, True, asdict(result),
                 signature_path=str(signature_stored_path) if signature_stored_path else None,
+                bangla_name_path=str(bangla_name_stored_path) if bangla_name_stored_path else None,
             )
             return NIDFrontResponse(
                 name=result.name,
@@ -68,6 +72,7 @@ class NIDFrontRouter:
                 date_of_birth=result.date_of_birth,
                 nid_number=result.nid_number,
                 signature_base64=base64.b64encode(signature).decode() if signature else None,
+                bangla_name=base64.b64encode(bangla_name).decode() if bangla_name else None,
             )
         except NIDOCRError as e:
             record_upload("front", file.filename, str(stored_path) if stored_path else None, ocr, False, error_message=str(e))

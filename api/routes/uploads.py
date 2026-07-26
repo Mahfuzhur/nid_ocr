@@ -35,6 +35,13 @@ class UploadsRouter:
             summary="Fetch the extracted signature crop for an upload record",
             include_in_schema=False,
         )
+        self.router.add_api_route(
+            "/uploads/{record_id}/bangla_name",
+            self._bangla_name,
+            methods=["GET"],
+            summary="Fetch the extracted Bangla name crop for an upload record",
+            include_in_schema=False,
+        )
 
     async def _list(
         self,
@@ -89,6 +96,18 @@ class UploadsRouter:
             raise HTTPException(status_code=404, detail="Signature not found.")
         return FileResponse(row["signature_path"])
 
+    async def _bangla_name(self, record_id: int):
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT bangla_name_path FROM ocr_uploads WHERE id = %s", (record_id,))
+                row = cur.fetchone()
+        finally:
+            conn.close()
+        if not row or not row["bangla_name_path"]:
+            raise HTTPException(status_code=404, detail="Bangla name crop not found.")
+        return FileResponse(row["bangla_name_path"])
+
     def _render(self, rows, total, side, status, date_from, date_to, search, page) -> str:
         filters = {
             "side": side or "",
@@ -103,7 +122,7 @@ class UploadsRouter:
             return f'<option value="{value}"{selected}>{label}</option>'
 
         table_rows = "\n".join(self._render_row(r) for r in rows) or (
-            '<tr><td colspan="7" class="empty">No uploads match these filters.</td></tr>'
+            '<tr><td colspan="8" class="empty">No uploads match these filters.</td></tr>'
         )
 
         total_pages = max((total + PAGE_SIZE - 1) // PAGE_SIZE, 1)
@@ -182,7 +201,7 @@ class UploadsRouter:
 <table>
   <thead>
     <tr>
-      <th>ID</th><th>Side</th><th>Filename</th><th>Uploaded</th><th>Status</th><th>Signature</th><th>Extracted Data</th>
+      <th>ID</th><th>Side</th><th>Filename</th><th>Uploaded</th><th>Status</th><th>Signature</th><th>Bangla Name</th><th>Extracted Data</th>
     </tr>
   </thead>
   <tbody>
@@ -240,6 +259,13 @@ class UploadsRouter:
             if row.get("signature_path") else "—"
         )
 
+        bangla_name_link = (
+            f'<label class="thumb-wrap">'
+            f'<input type="checkbox" class="thumb-toggle">'
+            f'<img class="thumb sig-thumb" src="/uploads/{row["id"]}/bangla_name" alt="bangla name" loading="lazy"></label>'
+            if row.get("bangla_name_path") else "—"
+        )
+
         return f"""<tr>
       <td>{row['id']}</td>
       <td>{escape(row['side'])}</td>
@@ -247,6 +273,7 @@ class UploadsRouter:
       <td>{created_s}</td>
       <td>{badge}</td>
       <td>{signature_link}</td>
+      <td>{bangla_name_link}</td>
       <td>{details}</td>
     </tr>"""
 

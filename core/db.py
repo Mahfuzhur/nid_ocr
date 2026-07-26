@@ -67,9 +67,10 @@ def init_db() -> None:
                         INDEX idx_created_at (created_at)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                 """)
-                # Table may already exist from before signature_path was added.
-                # Vanilla MySQL has no ADD COLUMN IF NOT EXISTS (that's a
-                # MariaDB extension), so check information_schema instead.
+                # Table may already exist from before signature_path/
+                # bangla_name_path were added. Vanilla MySQL has no ADD
+                # COLUMN IF NOT EXISTS (that's a MariaDB extension), so check
+                # information_schema instead.
                 cur.execute(
                     "SELECT COUNT(*) AS c FROM information_schema.columns "
                     "WHERE table_schema = DATABASE() AND table_name = 'ocr_uploads' "
@@ -78,6 +79,15 @@ def init_db() -> None:
                 if cur.fetchone()["c"] == 0:
                     cur.execute(
                         "ALTER TABLE ocr_uploads ADD COLUMN signature_path VARCHAR(500) AFTER stored_path"
+                    )
+                cur.execute(
+                    "SELECT COUNT(*) AS c FROM information_schema.columns "
+                    "WHERE table_schema = DATABASE() AND table_name = 'ocr_uploads' "
+                    "AND column_name = 'bangla_name_path'"
+                )
+                if cur.fetchone()["c"] == 0:
+                    cur.execute(
+                        "ALTER TABLE ocr_uploads ADD COLUMN bangla_name_path VARCHAR(500) AFTER signature_path"
                     )
         finally:
             conn.close()
@@ -95,6 +105,7 @@ def record_upload(
     extracted_data: dict | None = None,
     error_message: str | None = None,
     signature_path: str | None = None,
+    bangla_name_path: str | None = None,
 ) -> None:
     """Insert one row per processed upload. Never raises — a logging failure
     shouldn't affect the OCR response already computed for the caller."""
@@ -105,14 +116,15 @@ def record_upload(
                 cur.execute(
                     """
                     INSERT INTO ocr_uploads
-                        (side, original_filename, stored_path, signature_path, ocr_engine, success, extracted_data, error_message)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        (side, original_filename, stored_path, signature_path, bangla_name_path, ocr_engine, success, extracted_data, error_message)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         side,
                         original_filename,
                         stored_path,
                         signature_path,
+                        bangla_name_path,
                         ocr_engine,
                         1 if success else 0,
                         json.dumps(extracted_data) if extracted_data is not None else None,
@@ -175,7 +187,7 @@ def query_uploads(
 
             cur.execute(
                 f"""
-                SELECT id, side, original_filename, stored_path, signature_path, ocr_engine,
+                SELECT id, side, original_filename, stored_path, signature_path, bangla_name_path, ocr_engine,
                        success, extracted_data, error_message, created_at
                 FROM ocr_uploads
                 {where_clause}
