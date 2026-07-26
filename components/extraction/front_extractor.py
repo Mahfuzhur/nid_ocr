@@ -331,8 +331,12 @@ class FrontFieldExtractor(FieldExtractor):
             # one position off or get wrongly assigned as e.g. spouse. Dedup by
             # transliteration similarity against every candidate already kept,
             # seeded with the person's own English name, so only the first-seen
-            # copy of each distinct person survives.
+            # copy of each distinct person survives. Candidates deduped away
+            # specifically because they matched name_en are kept in
+            # `own_name_repeats` rather than just discarded — if নাম's own label
+            # match failed, one of those is our only source for name_bn.
             kept_translits = [name_en] if name_en else []
+            own_name_repeats: list[str] = []
             deduped = []
             for c in bn_names:
                 translit = (self._tr.transliterate(c) or '').lower()
@@ -340,6 +344,8 @@ class FrontFieldExtractor(FieldExtractor):
                     difflib.SequenceMatcher(None, translit, ref.lower()).ratio() > _OWN_NAME_SIMILARITY_CUTOFF
                     for ref in kept_translits
                 ):
+                    if name_en and difflib.SequenceMatcher(None, translit, name_en.lower()).ratio() > _OWN_NAME_SIMILARITY_CUTOFF:
+                        own_name_repeats.append(c)
                     continue
                 deduped.append(c)
                 kept_translits.append(translit)
