@@ -316,7 +316,7 @@ class FrontFieldExtractor(FieldExtractor):
         # card), so this filters by content — excluding address-block text and
         # anything already claimed by a label match — rather than cutting the
         # list off at the first DOB/NID occurrence by position.
-        if not (name_bn or name_en) or not father_bn or not mother_bn:
+        if not name_bn or not father_bn or not mother_bn:
             bn_names = [s2.strip() for s2 in segments
                         if _looks_like_person_name_bn(s2)
                         and s2.strip() not in claimed
@@ -325,13 +325,18 @@ class FrontFieldExtractor(FieldExtractor):
             # A label-less repeat of the person's own name (found only via name_en,
             # so never added to `claimed`) would otherwise occupy the first slot
             # below and push father/mother/spouse candidates one position off.
+            # Pull it out into `own_name_repeats` rather than just discarding it —
+            # if নাম's own label match failed, this repeat is our only source for
+            # name_bn.
+            own_name_repeats: list[str] = []
             if name_en:
-                bn_names = [
+                own_name_repeats = [
                     c for c in bn_names
                     if difflib.SequenceMatcher(
                         None, (self._tr.transliterate(c) or '').lower(), name_en.lower()
-                    ).ratio() <= _OWN_NAME_SIMILARITY_CUTOFF
+                    ).ratio() > _OWN_NAME_SIMILARITY_CUTOFF
                 ]
+                bn_names = [c for c in bn_names if c not in own_name_repeats]
 
             # Card order is fixed — নাম, then পিতা/স্বামী, then মাতা, then
             # পত্নী — but a role's OCR can drop out entirely (not just go
@@ -343,9 +348,13 @@ class FrontFieldExtractor(FieldExtractor):
             # via _FEMININE_NAME_MARKER), and by plain order otherwise.
             remaining = list(bn_names)
 
-            if not name_bn and not name_en and remaining:
-                name_bn = remaining.pop(0)
-                logger.info(f"Positional name: {name_bn}")
+            if not name_bn:
+                if name_en and own_name_repeats:
+                    name_bn = own_name_repeats[0]
+                    logger.info(f"Positional name (bn, matched own name_en): {name_bn}")
+                elif not name_en and remaining:
+                    name_bn = remaining.pop(0)
+                    logger.info(f"Positional name: {name_bn}")
 
             if not father_bn:
                 idx = next((i for i, c in enumerate(remaining) if not _FEMININE_NAME_MARKER.search(c)), None)
