@@ -50,7 +50,7 @@ class NIDFrontService:
             fmt = self._detector.detect(all_segments)
             fields = self._extractor.extract(all_segments, fmt)
             signature = self._signature_extractor.extract(image_path, fmt)
-            bangla_name = self._bangla_name_extractor.extract(image_path, fmt)
+            bangla_name = self._bangla_name_extractor.extract(image_path)
 
             return NIDFrontData(**fields), signature, bangla_name
         finally:
