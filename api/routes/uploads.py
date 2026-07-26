@@ -10,6 +10,23 @@ from nid_ocr.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Display order for the Extracted Data column's name-related fields, pairing
+# each transliterated field with its original Bengali OCR text as its own
+# row directly after (or, for the person's own name, before) it.
+_NAME_FIELD_ORDER = [
+    ("bangla_name", "name_bn"),
+    ("name", "name"),
+    ("nid_number", "nid_number"),
+    ("father_name", "father_name"),
+    ("father_bangla_name", "father_name_bn"),
+    ("mother_name", "mother_name"),
+    ("mother_bangla_name", "mother_name_bn"),
+    ("spouse_name", "spouse_name"),
+    ("spouse_bangla_name", "spouse_name_bn"),
+    ("date_of_birth", "date_of_birth"),
+]
+_NAME_FIELD_KEYS = {key for _, key in _NAME_FIELD_ORDER}
+
 
 class UploadsRouter:
     def __init__(self):
@@ -222,22 +239,21 @@ class UploadsRouter:
             badge = '<span class="badge success">Success</span>'
             data = row["extracted_data"] or {}
             # Name fields carry both a transliterated English value and the
-            # original Bengali OCR text (stored under a "_bn" suffix) — pair
-            # them up in the display instead of listing the Bengali twin as
-            # its own row.
-            bn_pairs = {
-                "name": "name_bn",
-                "father_name": "father_name_bn",
-                "mother_name": "mother_name_bn",
-                "spouse_name": "spouse_name_bn",
-            }
+            # original Bengali OCR text (stored under a "_bn" suffix) — show
+            # each Bengali twin as its own labeled row, in a fixed order,
+            # rather than dict insertion order (which interleaves them
+            # differently front vs back records).
             rendered = []
-            for k, v in data.items():
-                if k in bn_pairs.values():
+            for label, key in _NAME_FIELD_ORDER:
+                if key not in data:
                     continue
-                en_val = escape(str(v)) if v is not None else "—"
-                bn_val = data.get(bn_pairs.get(k, ""))
-                value = f"{en_val} / {escape(str(bn_val))}" if bn_val else en_val
+                v = data[key]
+                value = escape(str(v)) if v is not None else "—"
+                rendered.append(f"<div><dt>{label}:</dt><dd>{value}</dd></div>")
+            for k, v in data.items():
+                if k in _NAME_FIELD_KEYS:
+                    continue
+                value = escape(str(v)) if v is not None else "—"
                 rendered.append(f"<div><dt>{escape(str(k))}:</dt><dd>{value}</dd></div>")
             fields = "".join(rendered)
             details = f'<dl class="fields">{fields}</dl>' if fields else "—"
