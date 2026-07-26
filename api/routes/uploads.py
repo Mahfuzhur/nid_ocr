@@ -202,10 +202,25 @@ class UploadsRouter:
         if row["success"]:
             badge = '<span class="badge success">Success</span>'
             data = row["extracted_data"] or {}
-            fields = "".join(
-                f"<div><dt>{escape(str(k))}:</dt><dd>{escape(str(v)) if v is not None else '—'}</dd></div>"
-                for k, v in data.items()
-            )
+            # Name fields carry both a transliterated English value and the
+            # original Bengali OCR text (stored under a "_bn" suffix) — pair
+            # them up in the display instead of listing the Bengali twin as
+            # its own row.
+            bn_pairs = {
+                "name": "name_bn",
+                "father_name": "father_name_bn",
+                "mother_name": "mother_name_bn",
+                "spouse_name": "spouse_name_bn",
+            }
+            rendered = []
+            for k, v in data.items():
+                if k in bn_pairs.values():
+                    continue
+                en_val = escape(str(v)) if v is not None else "—"
+                bn_val = data.get(bn_pairs.get(k, ""))
+                value = f"{en_val} / {escape(str(bn_val))}" if bn_val else en_val
+                rendered.append(f"<div><dt>{escape(str(k))}:</dt><dd>{value}</dd></div>")
+            fields = "".join(rendered)
             details = f'<dl class="fields">{fields}</dl>' if fields else "—"
         else:
             badge = '<span class="badge failed">Failed</span>'
