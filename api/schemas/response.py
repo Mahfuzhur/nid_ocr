@@ -9,6 +9,7 @@ class NIDFrontResponse(BaseModel):
     date_of_birth: str | None = None
     nid_number: str | None = None
     signature_base64: str | None = None
+    bangla_name: str | None = None
 
 
 class NIDBackResponse(BaseModel):

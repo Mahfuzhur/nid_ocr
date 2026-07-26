@@ -10,6 +10,23 @@ from nid_ocr.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Display order for the Extracted Data column's name-related fields, pairing
+# each transliterated field with its original Bengali OCR text as its own
+# row directly after (or, for the person's own name, before) it.
+_NAME_FIELD_ORDER = [
+    ("bangla_name", "name_bn"),
+    ("name", "name"),
+    ("nid_number", "nid_number"),
+    ("father_name", "father_name"),
+    ("father_bangla_name", "father_name_bn"),
+    ("mother_name", "mother_name"),
+    ("mother_bangla_name", "mother_name_bn"),
+    ("spouse_name", "spouse_name"),
+    ("spouse_bangla_name", "spouse_name_bn"),
+    ("date_of_birth", "date_of_birth"),
+]
+_NAME_FIELD_KEYS = {key for _, key in _NAME_FIELD_ORDER}
+
 
 class UploadsRouter:
     def __init__(self):
@@ -33,6 +50,13 @@ class UploadsRouter:
             self._signature,
             methods=["GET"],
             summary="Fetch the extracted signature crop for an upload record",
+            include_in_schema=False,
+        )
+        self.router.add_api_route(
+            "/uploads/{record_id}/bangla_name",
+            self._bangla_name,
+            methods=["GET"],
+            summary="Fetch the extracted Bangla name crop for an upload record",
             include_in_schema=False,
         )
 
@@ -89,6 +113,18 @@ class UploadsRouter:
             raise HTTPException(status_code=404, detail="Signature not found.")
         return FileResponse(row["signature_path"])
 
+    async def _bangla_name(self, record_id: int):
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT bangla_name_path FROM ocr_uploads WHERE id = %s", (record_id,))
+                row = cur.fetchone()
+        finally:
+            conn.close()
+        if not row or not row["bangla_name_path"]:
+            raise HTTPException(status_code=404, detail="Bangla name crop not found.")
+        return FileResponse(row["bangla_name_path"])
+
     def _render(self, rows, total, side, status, date_from, date_to, search, page) -> str:
         filters = {
             "side": side or "",
@@ -103,7 +139,7 @@ class UploadsRouter:
             return f'<option value="{value}"{selected}>{label}</option>'
 
         table_rows = "\n".join(self._render_row(r) for r in rows) or (
-            '<tr><td colspan="7" class="empty">No uploads match these filters.</td></tr>'
+            '<tr><td colspan="8" class="empty">No uploads match these filters.</td></tr>'
         )
 
         total_pages = max((total + PAGE_SIZE - 1) // PAGE_SIZE, 1)
@@ -182,7 +218,7 @@ class UploadsRouter:
 <table>
   <thead>
     <tr>
-      <th>ID</th><th>Side</th><th>Filename</th><th>Uploaded</th><th>Status</th><th>Signature</th><th>Extracted Data</th>
+      <th>ID</th><th>Side</th><th>Filename</th><th>Uploaded</th><th>Status</th><th>Signature</th><th>Bangla Name</th><th>Extracted Data</th>
     </tr>
   </thead>
   <tbody>
@@ -202,10 +238,24 @@ class UploadsRouter:
         if row["success"]:
             badge = '<span class="badge success">Success</span>'
             data = row["extracted_data"] or {}
-            fields = "".join(
-                f"<div><dt>{escape(str(k))}:</dt><dd>{escape(str(v)) if v is not None else '—'}</dd></div>"
-                for k, v in data.items()
-            )
+            # Name fields carry both a transliterated English value and the
+            # original Bengali OCR text (stored under a "_bn" suffix) — show
+            # each Bengali twin as its own labeled row, in a fixed order,
+            # rather than dict insertion order (which interleaves them
+            # differently front vs back records).
+            rendered = []
+            for label, key in _NAME_FIELD_ORDER:
+                if key not in data:
+                    continue
+                v = data[key]
+                value = escape(str(v)) if v is not None else "—"
+                rendered.append(f"<div><dt>{label}:</dt><dd>{value}</dd></div>")
+            for k, v in data.items():
+                if k in _NAME_FIELD_KEYS:
+                    continue
+                value = escape(str(v)) if v is not None else "—"
+                rendered.append(f"<div><dt>{escape(str(k))}:</dt><dd>{value}</dd></div>")
+            fields = "".join(rendered)
             details = f'<dl class="fields">{fields}</dl>' if fields else "—"
         else:
             badge = '<span class="badge failed">Failed</span>'
@@ -225,6 +275,13 @@ class UploadsRouter:
             if row.get("signature_path") else "—"
         )
 
+        bangla_name_link = (
+            f'<label class="thumb-wrap">'
+            f'<input type="checkbox" class="thumb-toggle">'
+            f'<img class="thumb sig-thumb" src="/uploads/{row["id"]}/bangla_name" alt="bangla name" loading="lazy"></label>'
+            if row.get("bangla_name_path") else "—"
+        )
+
         return f"""<tr>
       <td>{row['id']}</td>
       <td>{escape(row['side'])}</td>
@@ -232,6 +289,7 @@ class UploadsRouter:
       <td>{created_s}</td>
       <td>{badge}</td>
       <td>{signature_link}</td>
+      <td>{bangla_name_link}</td>
       <td>{details}</td>
     </tr>"""
 

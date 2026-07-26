@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from nid_ocr.domain.models import NIDFrontData; from nid_ocr.components.extraction.front_extractor import FrontFieldExtractor; from nid_ocr.api.routes.uploads import UploadsRouter; print\\('ok'\\)\")",
+      "Bash(python -c \"import sys; sys.path.insert\\(0,'.'\\); from domain.models import NIDFrontData; from components.extraction.front_extractor import FrontFieldExtractor; from api.routes.uploads import UploadsRouter; print\\('ok', NIDFrontData\\(\\)\\)\")",
+      "Read(//f/Mahfuzh__app/**)",
+      "Bash(python -c ' *)",
+      "Bash(python -m py_compile nid_ocr/api/routes/uploads.py)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git config *)"
+    ]
+  }
+}

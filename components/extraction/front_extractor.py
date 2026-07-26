@@ -384,4 +384,8 @@ class FrontFieldExtractor(FieldExtractor):
             "spouse_name":   self._tr.transliterate(spouse_bn) if spouse_bn else None,
             "date_of_birth": date_of_birth,
             "nid_number":    nid_number,
+            "name_bn":         name_bn,
+            "father_name_bn":  father_bn,
+            "mother_name_bn":  mother_bn,
+            "spouse_name_bn":  spouse_bn,
         }

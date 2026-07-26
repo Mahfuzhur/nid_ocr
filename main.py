@@ -18,6 +18,7 @@ from nid_ocr.components.detection.format_detector import NIDFormatDetector
 from nid_ocr.components.extraction.front_extractor import FrontFieldExtractor
 from nid_ocr.components.extraction.back_extractor import BackFieldExtractor
 from nid_ocr.components.signature.signature_extractor import SignatureExtractor
+from nid_ocr.components.signature.bangla_name_extractor import BanglaNameExtractor
 from nid_ocr.components.transliteration.term_dictionary import TermDictionary, COMMON_TERMS
 from nid_ocr.components.transliteration.indic_transliterator import IndicNLPTransliterator
 
@@ -55,8 +56,9 @@ transliterator  = IndicNLPTransliterator(TermDictionary(COMMON_TERMS))
 front_extractor = FrontFieldExtractor(transliterator)
 back_extractor  = BackFieldExtractor(transliterator)
 signature_extractor = SignatureExtractor()
+bangla_name_extractor = BanglaNameExtractor()
 
-front_service   = NIDFrontService(preprocessor, engines, detector, front_extractor, signature_extractor)
+front_service   = NIDFrontService(preprocessor, engines, detector, front_extractor, signature_extractor, bangla_name_extractor)
 back_service    = NIDBackService(preprocessor, engines, detector, back_extractor)
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
