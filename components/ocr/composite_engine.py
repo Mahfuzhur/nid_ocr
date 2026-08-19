@@ -18,5 +18,5 @@ class CompositeOCREngine(OCREngine):
                 if segment not in seen:
                     seen.add(segment)
                     merged.append(segment)
-        logger.info(f"CompositeOCR extracted {len(merged)} unique segments from {image_path}")
+        logger.info(f"CompositeOCR extracted {len(merged)} unique segments")
         return merged

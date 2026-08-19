@@ -72,6 +72,6 @@ class SuryaOCREngine(OCREngine):
                     if t:
                         segments.append(t)
             return segments
-        except Exception as e:
-            logger.warning(f"Surya OCR failed on {image_path}: {e}")
+        except Exception as exc:
+            logger.warning(f"Surya OCR failed ({type(exc).__name__})")
             return []

@@ -26,6 +26,7 @@ from nid_ocr.components.transliteration.term_dictionary import COMMON_TERMS, Ter
 from nid_ocr.core.concurrency import OCRConcurrencyGate
 from nid_ocr.core.config import settings
 from nid_ocr.core.logging import get_logger
+from nid_ocr.core.request_timing import OCRTimingMiddleware
 from nid_ocr.services.nid_back_service import NIDBackService
 from nid_ocr.services.nid_front_service import NIDFrontService
 
@@ -83,6 +84,7 @@ app = FastAPI(
     version="3.1.0",
     lifespan=lifespan,
 )
+app.add_middleware(OCRTimingMiddleware)
 app.include_router(NIDFrontRouter(front_service, gpu_gate).router, tags=["NID"])
 app.include_router(NIDBackRouter(back_service, gpu_gate).router, tags=["NID"])
 

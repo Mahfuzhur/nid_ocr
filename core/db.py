@@ -134,7 +134,7 @@ def record_upload(
         finally:
             conn.close()
     except Exception:
-        logger.exception(f"Failed to record upload history for {original_filename}")
+        logger.error("Failed to record upload history")
 
 
 def query_uploads(

@@ -14,6 +14,6 @@ class TesseractEngine(OCREngine):
         try:
             raw = pytesseract.image_to_string(image_path, lang=self._lang, config=self._config)
             return [line.strip() for line in raw.splitlines() if line.strip()]
-        except Exception as e:
-            logger.warning(f"Tesseract failed on {image_path}: {e}")
+        except Exception as exc:
+            logger.warning(f"Tesseract failed ({type(exc).__name__})")
             return []

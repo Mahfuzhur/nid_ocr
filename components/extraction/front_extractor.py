@@ -303,7 +303,7 @@ class FrontFieldExtractor(FieldExtractor):
                 raw = re.sub(r'[\s\-]', '', seg)
                 for d in re.findall(r'\d{10}|\d{13}|\d{17}', raw):
                     nid_number = d
-                    logger.info(f"NID number found via fallback scan: {nid_number}")
+                    logger.info("NID number found via fallback scan")
                     break
                 if nid_number:
                     break
@@ -364,27 +364,27 @@ class FrontFieldExtractor(FieldExtractor):
             if not name_bn:
                 if name_en and own_name_repeats:
                     name_bn = own_name_repeats[0]
-                    logger.info(f"Positional name (bn, matched own name_en): {name_bn}")
+                    logger.info("Bengali name found by positional matching")
                 elif not name_en and remaining:
                     name_bn = remaining.pop(0)
-                    logger.info(f"Positional name: {name_bn}")
+                    logger.info("Name found by positional matching")
 
             if not father_bn:
                 idx = next((i for i, c in enumerate(remaining) if not _FEMININE_NAME_MARKER.search(c)), None)
                 if idx is not None:
                     father_bn = remaining.pop(idx)
-                    logger.info(f"Positional father: {father_bn}")
+                    logger.info("Father name found by positional matching")
 
             if not mother_bn:
                 idx = next((i for i, c in enumerate(remaining) if _FEMININE_NAME_MARKER.search(c)),
                            0 if remaining else None)
                 if idx is not None:
                     mother_bn = remaining.pop(idx)
-                    logger.info(f"Positional mother: {mother_bn}")
+                    logger.info("Mother name found by positional matching")
 
             if not spouse_bn and remaining:
                 spouse_bn = remaining.pop(0)
-                logger.info(f"Positional spouse: {spouse_bn}")
+                logger.info("Spouse name found by positional matching")
 
         # ── Transliterate Bengali fields ──────────────────────────────────
         return {

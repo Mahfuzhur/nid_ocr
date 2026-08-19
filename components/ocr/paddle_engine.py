@@ -31,6 +31,6 @@ class PaddleOCREngine(OCREngine):
                     if t:
                         segments.append(t)
             return segments
-        except Exception as e:
-            logger.warning(f"PaddleOCR failed on {image_path}: {e}")
+        except Exception as exc:
+            logger.warning(f"PaddleOCR failed ({type(exc).__name__})")
             return []

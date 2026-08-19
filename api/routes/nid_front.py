@@ -3,8 +3,9 @@ import base64
 import os
 import shutil
 import tempfile
+import time
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from nid_ocr.api.schemas.response import NIDFrontResponse
 from nid_ocr.core.concurrency import OCRBusyError, OCRConcurrencyGate
@@ -29,7 +30,7 @@ class NIDFrontRouter:
             summary="Extract fields from NID front image",
         )
 
-    async def _handle(self, file: UploadFile = File(...)) -> NIDFrontResponse:
+    async def _handle(self, request: Request, file: UploadFile = File(...)) -> NIDFrontResponse:
         self._validate_extension(file.filename)
 
         tmp_dir = tempfile.mkdtemp()
@@ -40,11 +41,23 @@ class NIDFrontRouter:
             with open(tmp_path, "wb") as output:
                 shutil.copyfileobj(file.file, output)
 
-            logger.info(f"Processing front NID: {safe_filename} (ocr={ocr})")
-            async with self._gate.slot():
-                result, signature, bangla_name = await asyncio.to_thread(
-                    self._service.process, tmp_path, ocr=ocr
-                )
+            logger.info(f"Processing front NID (ocr={ocr})")
+            queue_started = time.perf_counter()
+            try:
+                async with self._gate.slot():
+                    request.state.queue_wait_ms = round((time.perf_counter() - queue_started) * 1000, 2)
+                    processing_started = time.perf_counter()
+                    try:
+                        result, signature, bangla_name = await asyncio.to_thread(
+                            self._service.process, tmp_path, ocr=ocr
+                        )
+                    finally:
+                        request.state.processing_ms = round(
+                            (time.perf_counter() - processing_started) * 1000, 2
+                        )
+            except OCRBusyError:
+                request.state.queue_wait_ms = round((time.perf_counter() - queue_started) * 1000, 2)
+                raise
             return NIDFrontResponse(
                 name=result.name,
                 father_name=result.father_name,
@@ -64,7 +77,7 @@ class NIDFrontRouter:
         except NIDOCRError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except Exception as exc:
-            logger.exception(f"Unexpected error processing {safe_filename}")
+            logger.error(f"Unexpected front OCR error ({type(exc).__name__})")
             raise HTTPException(status_code=500, detail="Internal processing error.") from exc
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)

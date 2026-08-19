@@ -18,7 +18,7 @@ def save_upload(tmp_path: str, subfolder: str, original_filename: str) -> Path |
         shutil.copy2(tmp_path, dest_path)
         return dest_path
     except Exception:
-        logger.exception(f"Failed to save permanent copy of {original_filename}")
+        logger.error("Failed to save permanent upload copy")
         return None
 
 
@@ -32,5 +32,5 @@ def save_bytes(data: bytes, subfolder: str, filename: str) -> Path | None:
         dest_path.write_bytes(data)
         return dest_path
     except Exception:
-        logger.exception(f"Failed to save {filename}")
+        logger.error("Failed to save generated file")
         return None

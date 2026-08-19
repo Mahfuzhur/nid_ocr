@@ -35,6 +35,15 @@ class Settings:
     ocr_warmup_enabled: bool = field(
         default_factory=lambda: os.environ.get('OCR_WARMUP_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
     )
+    ocr_timing_log_file: str = field(
+        default_factory=lambda: os.environ.get('OCR_TIMING_LOG_FILE', 'logs/ocr_response_times.log')
+    )
+    ocr_timing_log_max_bytes: int = field(
+        default_factory=lambda: int(os.environ.get('OCR_TIMING_LOG_MAX_BYTES', str(10 * 1024 * 1024)))
+    )
+    ocr_timing_log_backup_count: int = field(
+        default_factory=lambda: int(os.environ.get('OCR_TIMING_LOG_BACKUP_COUNT', '5'))
+    )
     easyocr_languages: list = field(default_factory=lambda: ['bn', 'en'])
     easyocr_gpu: bool = False
     easyocr_min_confidence: float = 0.0

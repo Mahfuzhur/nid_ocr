@@ -58,6 +58,6 @@ class ImagePreprocessor:
             path = os.path.join(output_dir, f"{name}.png")
             cv2.imwrite(path, img_data)
             paths[name] = path
-            logger.info(f"Saved preprocessed variant '{name}' -> {path}")
+            logger.info(f"Prepared preprocessed variant '{name}'")
 
         return paths

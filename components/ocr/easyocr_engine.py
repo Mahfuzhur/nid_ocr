@@ -54,6 +54,6 @@ class EasyOCREngine(OCREngine):
                         continue
                 out.append(text_s)
             return out
-        except Exception as e:
-            logger.warning(f"EasyOCR failed on {image_path}: {e}")
+        except Exception as exc:
+            logger.warning(f"EasyOCR failed ({type(exc).__name__})")
             return []

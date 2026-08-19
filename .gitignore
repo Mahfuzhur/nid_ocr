@@ -4,3 +4,4 @@ __pycache__/
 
 # Uploaded NID images contain sensitive personal data — never commit these.
 storage/
+logs/

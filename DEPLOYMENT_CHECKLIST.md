@@ -57,6 +57,10 @@ Use this checklist for the `codex/t4-ocr-optimizations` branch. Complete every *
 - [ ] `OCR_MAX_CONCURRENCY=2`
 - [ ] `OCR_QUEUE_WAIT_SECONDS=5`
 - [ ] `OCR_WARMUP_ENABLED=true`
+- [ ] `OCR_TIMING_LOG_FILE=logs/ocr_response_times.log`
+- [ ] `OCR_TIMING_LOG_MAX_BYTES=10485760`
+- [ ] `OCR_TIMING_LOG_BACKUP_COUNT=5`
+- [ ] Relative timing-log paths resolve from the `nid_ocr` package directory; confirm that directory is writable by the service account.
 - [ ] Environment files are readable only by the service account and are not exposed by the web server.
 - [ ] No database credentials or object-storage credentials are required for this stateless deployment.
 - [ ] Temporary storage has at least 10 GB free and is monitored for abnormal growth.
@@ -104,6 +108,9 @@ Use approved, non-production test images with known expected results.
 - [ ] Invalid/unreadable images fail safely without crashing the service.
 - [ ] Uploaded images, signature crops, and Bengali-name crops are not permanently saved after the response.
 - [ ] Application logs do not contain image content, base64 data, NID numbers, or other personal information.
+- [ ] `logs/ocr_response_times.log` contains one valid JSON record per OCR request.
+- [ ] Each timing record contains `request_id`, `status_code`, `queue_wait_ms`, `processing_ms`, and `total_duration_ms`.
+- [ ] The response contains an `X-Request-ID` header matching its timing-log record.
 
 ## 7. Performance and load acceptance
 
