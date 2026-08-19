@@ -14,14 +14,27 @@ class Settings:
 
     # If source image * upscale_factor exceeds this long-side pixel count, cap it.
     # Prevents EasyOCR from running on 100MP+ images when input is already high-res.
-    max_long_side: int = 3500
+    max_long_side: int = field(default_factory=lambda: int(os.environ.get('MAX_LONG_SIDE', '2800')))
 
     # OCR — engine used for all requests; override via DEFAULT_OCR_ENGINE env var.
     default_ocr_engine: str = field(default_factory=lambda: os.environ.get('DEFAULT_OCR_ENGINE', 'surya'))
     # Surya dtype: 'float32' (full precision) or 'float16' (Surya GPU default).
     # float32 → ~2x GPU memory, ~30% slower, better accuracy.
     # CPU deployments run float32 regardless of this value.
-    surya_dtype: str = field(default_factory=lambda: os.environ.get('SURYA_DTYPE', 'float32'))
+    surya_dtype: str = field(default_factory=lambda: os.environ.get('SURYA_DTYPE', 'float16'))
+    surya_recognition_batch_size: int = field(
+        default_factory=lambda: int(os.environ.get('SURYA_RECOGNITION_BATCH_SIZE', '64'))
+    )
+    surya_detector_batch_size: int = field(
+        default_factory=lambda: int(os.environ.get('SURYA_DETECTOR_BATCH_SIZE', '16'))
+    )
+    ocr_max_concurrency: int = field(default_factory=lambda: int(os.environ.get('OCR_MAX_CONCURRENCY', '2')))
+    ocr_queue_wait_seconds: float = field(
+        default_factory=lambda: float(os.environ.get('OCR_QUEUE_WAIT_SECONDS', '5'))
+    )
+    ocr_warmup_enabled: bool = field(
+        default_factory=lambda: os.environ.get('OCR_WARMUP_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
+    )
     easyocr_languages: list = field(default_factory=lambda: ['bn', 'en'])
     easyocr_gpu: bool = False
     easyocr_min_confidence: float = 0.0

@@ -1,5 +1,5 @@
 import cv2
-import easyocr
+import threading
 from .base import OCREngine
 from nid_ocr.core.logging import get_logger
 
@@ -8,12 +8,26 @@ logger = get_logger(__name__)
 
 class EasyOCREngine(OCREngine):
     def __init__(self, languages: list[str], gpu: bool = False, min_confidence: float = 0.0):
-        logger.info(f"Initializing EasyOCR with languages={languages}, gpu={gpu}")
-        self._reader = easyocr.Reader(languages, gpu=gpu)
+        self._languages = languages
+        self._gpu = gpu
+        self._reader = None
+        self._load_lock = threading.Lock()
         self._min_conf = min_confidence
+
+    def _ensure_loaded(self):
+        if self._reader is not None:
+            return
+        with self._load_lock:
+            if self._reader is not None:
+                return
+            import easyocr
+
+            logger.info(f"Initializing EasyOCR with languages={self._languages}, gpu={self._gpu}")
+            self._reader = easyocr.Reader(self._languages, gpu=self._gpu)
 
     def extract(self, image_path: str) -> list[str]:
         try:
+            self._ensure_loaded()
             results = self._reader.readtext(image_path)
 
             # Barcode filter: Smart NID back cards have a barcode in the top

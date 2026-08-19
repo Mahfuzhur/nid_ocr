@@ -1,4 +1,6 @@
+import os
 import re
+import threading
 from PIL import Image
 
 from .base import OCREngine
@@ -19,23 +21,40 @@ class SuryaOCREngine(OCREngine):
     def __init__(self):
         self._det = None
         self._rec = None
+        self._load_lock = threading.Lock()
 
     def _ensure_loaded(self):
         if self._det is not None:
             return
-        import torch
-        from nid_ocr.core.config import settings
-        from surya.detection import DetectionPredictor
-        from surya.foundation import FoundationPredictor
-        from surya.recognition import RecognitionPredictor
-        from surya.settings import settings as surya_settings
+        with self._load_lock:
+            if self._det is not None:
+                return
+            from nid_ocr.core.config import settings
 
-        dtype = torch.float32 if settings.surya_dtype == 'float32' else torch.float16
-        logger.info(f"Initializing Surya OCR (dtype={settings.surya_dtype}, takes 1-2 min)...")
-        self._det = DetectionPredictor()
-        foundation = FoundationPredictor(checkpoint=surya_settings.RECOGNITION_MODEL_CHECKPOINT, dtype=dtype)
-        self._rec = RecognitionPredictor(foundation)
-        logger.info("Surya OCR models loaded.")
+            os.environ.setdefault('RECOGNITION_BATCH_SIZE', str(settings.surya_recognition_batch_size))
+            os.environ.setdefault('DETECTOR_BATCH_SIZE', str(settings.surya_detector_batch_size))
+
+            import torch
+            from surya.detection import DetectionPredictor
+            from surya.foundation import FoundationPredictor
+            from surya.recognition import RecognitionPredictor
+            from surya.settings import settings as surya_settings
+
+            cuda_available = torch.cuda.is_available()
+            use_fp16 = settings.surya_dtype == 'float16' and cuda_available
+            dtype = torch.float16 if use_fp16 else torch.float32
+            device = torch.cuda.get_device_name(0) if cuda_available else 'CPU'
+            logger.info(f"Initializing Surya OCR (device={device}, dtype={dtype}, takes 1-2 min)...")
+            self._det = DetectionPredictor()
+            foundation = FoundationPredictor(
+                checkpoint=surya_settings.RECOGNITION_MODEL_CHECKPOINT,
+                dtype=dtype,
+            )
+            self._rec = RecognitionPredictor(foundation)
+            logger.info("Surya OCR models loaded.")
+
+    def warmup(self) -> None:
+        self._ensure_loaded()
 
     def extract(self, image_path: str) -> list[str]:
         try:

@@ -1,7 +1,6 @@
 import cv2
 
-from nid_ocr.components.signature.card_locator import locate_card
-from nid_ocr.components.signature.photo_locator import detect_largest_face
+from nid_ocr.components.signature.card_analysis import FrontCardAnalysis, analyze_front_card
 from nid_ocr.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -25,29 +24,30 @@ class BanglaNameExtractor:
     def extract(self, image_path: str) -> bytes | None:
         """Return the cropped Bengali name-line region as PNG bytes, or None
         if the image couldn't be read or the crop came out empty."""
-        img = cv2.imread(image_path)
-        if img is None:
-            logger.warning(f"Bangla name extraction: could not read {image_path}")
-            return None
+        analysis = analyze_front_card(image_path)
+        return self.extract_from_analysis(analysis)
 
-        card = locate_card(img)
+    def extract_from_analysis(self, analysis: FrontCardAnalysis | None) -> bytes | None:
+        if analysis is None:
+            return None
+        card = analysis.card
         h, w = card.shape[:2]
 
-        face = detect_largest_face(card)
+        face = analysis.face
         if face is None:
-            logger.info(f"Bangla name extraction: no face found, using fallback region for {image_path}")
+            logger.info("Bangla name extraction: no face found, using fallback region")
             x0, x1, y0, y1 = self._fraction_bounds(_NO_FACE_FALLBACK, w, h)
         else:
             x0, x1, y0, y1 = self._face_relative_bounds(face, w)
 
         crop = card[y0:y1, x0:x1]
         if crop.size == 0:
-            logger.warning(f"Bangla name extraction: empty crop for {image_path}")
+            logger.warning("Bangla name extraction: empty crop")
             return None
 
         ok, buf = cv2.imencode(".png", crop)
         if not ok:
-            logger.warning(f"Bangla name extraction: PNG encode failed for {image_path}")
+            logger.warning("Bangla name extraction: PNG encode failed")
             return None
         return buf.tobytes()
 

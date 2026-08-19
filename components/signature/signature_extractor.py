@@ -1,7 +1,6 @@
 import cv2
 
-from nid_ocr.components.signature.card_locator import locate_card
-from nid_ocr.components.signature.photo_locator import detect_largest_face
+from nid_ocr.components.signature.card_analysis import FrontCardAnalysis, analyze_front_card
 from nid_ocr.domain.enums import NIDFormat
 from nid_ocr.core.logging import get_logger
 
@@ -36,17 +35,18 @@ class SignatureExtractor:
     def extract(self, image_path: str, fmt: NIDFormat) -> bytes | None:
         """Return the cropped signature region as PNG bytes, or None if the
         image couldn't be read or the crop came out empty."""
-        img = cv2.imread(image_path)
-        if img is None:
-            logger.warning(f"Signature extraction: could not read {image_path}")
-            return None
+        analysis = analyze_front_card(image_path)
+        return self.extract_from_analysis(analysis, fmt)
 
-        card = locate_card(img)
+    def extract_from_analysis(self, analysis: FrontCardAnalysis | None, fmt: NIDFormat) -> bytes | None:
+        if analysis is None:
+            return None
+        card = analysis.card
         h, w = card.shape[:2]
 
-        face = detect_largest_face(card)
+        face = analysis.face
         if face is None:
-            logger.info(f"Signature extraction: no face found, using fallback region for {image_path}")
+            logger.info("Signature extraction: no face found, using fallback region")
             region = _NO_FACE_FALLBACK.get(fmt, _NO_FACE_FALLBACK[NIDFormat.SMART])
             x0, x1 = int(w * region["x0"]), int(w * region["x1"])
             y0, y1 = int(h * region["y0"]), int(h * region["y1"])
@@ -57,12 +57,12 @@ class SignatureExtractor:
 
         crop = card[y0:y1, x0:x1]
         if crop.size == 0:
-            logger.warning(f"Signature extraction: empty crop for {image_path}")
+            logger.warning("Signature extraction: empty crop")
             return None
 
         ok, buf = cv2.imencode(".png", crop)
         if not ok:
-            logger.warning(f"Signature extraction: PNG encode failed for {image_path}")
+            logger.warning("Signature extraction: PNG encode failed")
             return None
         return buf.tobytes()
 

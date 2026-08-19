@@ -7,8 +7,10 @@ from nid_ocr.components.detection.format_detector import NIDFormatDetector
 from nid_ocr.components.extraction.base import FieldExtractor
 from nid_ocr.components.signature.signature_extractor import SignatureExtractor
 from nid_ocr.components.signature.bangla_name_extractor import BanglaNameExtractor
+from nid_ocr.components.signature.card_analysis import analyze_front_card
 from nid_ocr.domain.models import NIDFrontData
 from nid_ocr.core.logging import get_logger
+from nid_ocr.services.adaptive_ocr import front_is_complete, run_adaptive_ocr
 
 logger = get_logger(__name__)
 
@@ -34,23 +36,13 @@ class NIDFrontService:
         engine = self._engines.get(ocr) or self._engines['auto']
         temp_dir = tempfile.mkdtemp()
         try:
-            variants = self._preprocessor.preprocess(image_path, temp_dir)
-
-            all_segments: list[str] = []
-            seen: set[str] = set()
-            paths = [image_path] + list(variants.values()) if getattr(engine, 'prefers_original_image', False) else list(variants.values())
-            for path in paths:
-                for seg in engine.extract(path):
-                    if seg not in seen:
-                        seen.add(seg)
-                        all_segments.append(seg)
-
-            logger.info(f"Front OCR ({ocr}): {len(all_segments)} segments collected")
-
-            fmt = self._detector.detect(all_segments)
-            fields = self._extractor.extract(all_segments, fmt)
-            signature = self._signature_extractor.extract(image_path, fmt)
-            bangla_name = self._bangla_name_extractor.extract(image_path)
+            fields, fmt = run_adaptive_ocr(
+                image_path, temp_dir, 'front', engine, self._preprocessor,
+                self._detector, self._extractor, front_is_complete,
+            )
+            analysis = analyze_front_card(image_path)
+            signature = self._signature_extractor.extract_from_analysis(analysis, fmt)
+            bangla_name = self._bangla_name_extractor.extract_from_analysis(analysis)
 
             return NIDFrontData(**fields), signature, bangla_name
         finally:

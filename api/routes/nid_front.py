@@ -1,24 +1,25 @@
+import asyncio
 import base64
 import os
 import shutil
 import tempfile
-from dataclasses import asdict
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
+
 from nid_ocr.api.schemas.response import NIDFrontResponse
-from nid_ocr.services.nid_front_service import NIDFrontService
+from nid_ocr.core.concurrency import OCRBusyError, OCRConcurrencyGate
 from nid_ocr.core.config import settings
 from nid_ocr.core.exceptions import NIDOCRError
 from nid_ocr.core.logging import get_logger
-from nid_ocr.core.storage import save_upload, save_bytes
-from nid_ocr.core.db import record_upload
+from nid_ocr.services.nid_front_service import NIDFrontService
 
 logger = get_logger(__name__)
 
 
 class NIDFrontRouter:
-    def __init__(self, service: NIDFrontService):
+    def __init__(self, service: NIDFrontService, gate: OCRConcurrencyGate):
         self._service = service
+        self._gate = gate
         self.router = APIRouter()
         self.router.add_api_route(
             "/nid/front",
@@ -28,42 +29,22 @@ class NIDFrontRouter:
             summary="Extract fields from NID front image",
         )
 
-    async def _handle(
-        self,
-        file: UploadFile = File(...),
-    ) -> NIDFrontResponse:
+    async def _handle(self, file: UploadFile = File(...)) -> NIDFrontResponse:
         self._validate_extension(file.filename)
 
         tmp_dir = tempfile.mkdtemp()
-        tmp_path = os.path.join(tmp_dir, file.filename)
+        safe_filename = os.path.basename((file.filename or 'upload').replace('\\', '/'))
+        tmp_path = os.path.join(tmp_dir, safe_filename)
         ocr = settings.default_ocr_engine
-        stored_path = None
         try:
-            with open(tmp_path, "wb") as f:
-                shutil.copyfileobj(file.file, f)
+            with open(tmp_path, "wb") as output:
+                shutil.copyfileobj(file.file, output)
 
-            stored_path = save_upload(tmp_path, "front", file.filename)
-
-            logger.info(f"Processing front NID: {file.filename} (ocr={ocr})")
-            result, signature, bangla_name = self._service.process(tmp_path, ocr=ocr)
-            # The signature/Bangla-name crops are each saved as their own file
-            # (like the original upload) and their paths recorded separately
-            # from extracted_data — keeping the base64 blobs out of that JSON
-            # column avoids bloating the DB row and dumping raw base64 text
-            # into the /uploads page's field list; the dedicated *_path
-            # columns let that page render them as image thumbnails instead,
-            # the same way it already does for the original upload.
-            signature_stored_path = (
-                save_bytes(signature, "signatures", f"{file.filename}.png") if signature else None
-            )
-            bangla_name_stored_path = (
-                save_bytes(bangla_name, "bangla_names", f"{file.filename}.png") if bangla_name else None
-            )
-            record_upload(
-                "front", file.filename, str(stored_path) if stored_path else None, ocr, True, asdict(result),
-                signature_path=str(signature_stored_path) if signature_stored_path else None,
-                bangla_name_path=str(bangla_name_stored_path) if bangla_name_stored_path else None,
-            )
+            logger.info(f"Processing front NID: {safe_filename} (ocr={ocr})")
+            async with self._gate.slot():
+                result, signature, bangla_name = await asyncio.to_thread(
+                    self._service.process, tmp_path, ocr=ocr
+                )
             return NIDFrontResponse(
                 name=result.name,
                 father_name=result.father_name,
@@ -74,18 +55,22 @@ class NIDFrontRouter:
                 signature_base64=base64.b64encode(signature).decode() if signature else None,
                 bangla_name=base64.b64encode(bangla_name).decode() if bangla_name else None,
             )
-        except NIDOCRError as e:
-            record_upload("front", file.filename, str(stored_path) if stored_path else None, ocr, False, error_message=str(e))
-            raise HTTPException(status_code=422, detail=str(e))
-        except Exception as e:
-            logger.exception(f"Unexpected error processing {file.filename}")
-            record_upload("front", file.filename, str(stored_path) if stored_path else None, ocr, False, error_message="Internal processing error.")
-            raise HTTPException(status_code=500, detail="Internal processing error.")
+        except OCRBusyError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=str(exc),
+                headers={'Retry-After': str(max(1, int(settings.ocr_queue_wait_seconds)))},
+            ) from exc
+        except NIDOCRError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.exception(f"Unexpected error processing {safe_filename}")
+            raise HTTPException(status_code=500, detail="Internal processing error.") from exc
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
     @staticmethod
-    def _validate_extension(filename: str) -> None:
+    def _validate_extension(filename: str | None) -> None:
         ext = os.path.splitext(filename or '')[-1].lower()
         if ext not in settings.allowed_extensions:
             raise HTTPException(
